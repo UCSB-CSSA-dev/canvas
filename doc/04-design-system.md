@@ -1,0 +1,155 @@
+# 04 Design System
+
+## Principles
+
+- **Minimal and quiet.** Dark surfaces, white text, one accent color. No gradients, heavy shadows, or decorative illustrations.
+- **Gold means attention.** Use gold/yellow only for primary actions, active navigation, unread badges, mentions, and important states. If everything is gold, nothing is.
+- **Content first.** Chat messages, file names, and assignment titles should be the most readable things on the screen.
+- **Dark only** in v1. No light theme toggle.
+
+## Color tokens
+
+| Token | Hex | Usage |
+| --- | --- | --- |
+| `background` | `#0a0a0a` | App background |
+| `surface` (`card`, `popover`) | `#171717` | Cards, sidebar, dialogs, menus |
+| `surface-hover` (`accent` in shadcn) | `#1f1f1f` | Hover rows, selected list items |
+| `border` / `input` | `#262626` | Dividers, input borders |
+| `foreground` | `#fafafa` | Normal text |
+| `muted-foreground` | `#a3a3a3` | Secondary text, timestamps, placeholders |
+| `subtle-foreground` | `#737373` | Disabled text, tertiary info |
+| `primary` (gold) | `#eab308` | Primary buttons, active nav, badges, focus ring, links |
+| `primary-hover` | `#facc15` | Hover on primary |
+| `primary-foreground` | `#0a0a0a` | Text on gold backgrounds |
+| `gold-muted` | `rgba(234, 179, 8, 0.12)` | Mention highlight background, oversight banner background |
+| `destructive` | `#ef4444` | Delete, reject, errors |
+| `success` | `#22c55e` | Approved, completed (use sparingly) |
+| `warning` | `#f59e0b` | Due soon, late |
+
+Rules:
+
+- Text on `background` and `surface` must be `foreground` or `muted-foreground` for contrast.
+- Never put white text on gold. Use `primary-foreground` (near black).
+- Status chips use a tinted background (12% opacity of the color) with the full color for text.
+
+## shadcn/ui theme
+
+Initialize shadcn with the "neutral" base and override the CSS variables in `app/globals.css`. Use the `.dark` palette as the only palette by adding `class="dark"` on `<html>`.
+
+```css
+:root,
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --popover: #171717;
+  --popover-foreground: #fafafa;
+  --primary: #eab308;
+  --primary-foreground: #0a0a0a;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #171717;
+  --muted-foreground: #a3a3a3;
+  --accent: #1f1f1f;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --border: #262626;
+  --input: #262626;
+  --ring: #eab308;
+  --radius: 0.5rem;
+
+  --sidebar: #111111;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #eab308;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #1f1f1f;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #262626;
+  --sidebar-ring: #eab308;
+}
+```
+
+If the installed shadcn version uses `oklch()` values, convert these hex values but keep the same colors.
+
+## Typography
+
+Use system fonts only, no web font downloads. The stack covers English and Simplified Chinese on macOS, Windows, iOS, Android, and Linux:
+
+```css
+--font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+  "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC",
+  "Helvetica Neue", Arial, sans-serif;
+--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+```
+
+| Role | Size / weight | Tailwind |
+| --- | --- | --- |
+| Page title | 20px / 600 | `text-xl font-semibold` |
+| Section title | 16px / 600 | `text-base font-semibold` |
+| Body, messages | 14px / 400, line-height 1.6 | `text-sm leading-relaxed` |
+| Secondary, timestamps | 12px / 400 | `text-xs text-muted-foreground` |
+
+Chinese text needs slightly more line height than English. Keep `leading-relaxed` for body text.
+
+## Spacing, radius, borders
+
+- 4px spacing grid (Tailwind default). Common paddings: `p-3` for list rows, `p-4` for cards, `p-6` for pages.
+- Radius: `rounded-md` (6px) for inputs and buttons, `rounded-lg` (8px) for cards and dialogs.
+- Separate areas with 1px `border-border` lines instead of shadows.
+
+## Layout
+
+```text
++------------+-------------------------------------------------+
+|  CSSA Hub  |  Page header (title, actions)                   |
+|            |-------------------------------------------------|
+|  Chat      |                                                 |
+|  Files     |                                                 |
+|  Tasks     |              Main content                       |
+|  Notices   |                                                 |
+|  Admin     |                                                 |
+|            |                                                 |
+|  --------  |                                                 |
+|  avatar    |                                                 |
+|  中/EN     |                                                 |
++------------+-------------------------------------------------+
+```
+
+- Desktop (1024px and up): fixed left sidebar, 240px wide, collapsible to icons (64px). Chat adds a second column for the channel list (280px).
+- Tablet (768 to 1023px): sidebar collapsed to icons by default.
+- Mobile (under 768px): bottom tab bar with Chat, Files, Tasks, Notices, More. List and detail views become separate screens.
+- Active nav item: gold text and a 2px gold left border, no filled background.
+- The language toggle (中 / EN) and the user menu sit at the bottom of the sidebar.
+
+## Components (shadcn/ui)
+
+Use these shadcn components before building custom ones:
+
+| Need | Component |
+| --- | --- |
+| Navigation | `sidebar`, `sheet` (mobile), `breadcrumb` |
+| Actions | `button`, `dropdown-menu`, `context-menu` |
+| Forms | `form`, `input`, `textarea`, `select`, `checkbox`, `calendar` + `popover` (date picker), `command` (people picker) |
+| Overlays | `dialog`, `alert-dialog` (destructive confirms), `drawer` (mobile) |
+| Data | `table`, `tabs`, `badge`, `avatar`, `scroll-area`, `skeleton` |
+| Feedback | `sonner` (toasts), `tooltip`, `progress` |
+
+Button variants: `default` = gold primary (one per view, at most), `secondary` = dark gray, `ghost` for toolbar icons, `destructive` for delete or reject.
+
+## Specific patterns
+
+- **Unread badge**: gold pill with dark text, `text-xs font-semibold`, "99+" cap.
+- **Mention in a message**: gold text; the whole message row gets the `gold-muted` background when it mentions the viewer.
+- **Oversight banner**: full-width bar at the top of the content, `gold-muted` background, gold eye icon, text "监督查看模式（只读）/ Oversight view (read-only)".
+- **Status chips (assignments)**: assigned = gray, in progress = blue-gray, submitted = gold, changes requested = warning, approved = success, late = destructive outline.
+- **Empty states**: one line of muted text and an optional gold primary action. No illustrations.
+- **Loading**: `skeleton` rows, not spinners, for lists.
+- **Icons**: `lucide-react` (bundled with shadcn), 16px in lists, 20px in navigation.
+
+## Accessibility
+
+- All interactive elements are keyboard reachable with a visible gold focus ring (`ring-2 ring-ring`).
+- Color is never the only signal: badges have text, status chips have labels.
+- Minimum contrast 4.5:1 for body text (white and `#a3a3a3` on `#0a0a0a` both pass).
+- Set `lang="zh-CN"` or `lang="en"` on `<html>` to match the current locale.

@@ -9,7 +9,7 @@ Roles come from **department memberships**, except system admin, which is a flag
 | Role | How it is assigned | Scope |
 | --- | --- | --- |
 | **系统管理员 System Admin** | `users.isSystemAdmin = true`. The **first account ever created** gets it automatically (see [accounts-and-onboarding.md](features/accounts-and-onboarding.md#first-account-becomes-system-admin)) | Everything, every page |
-| **主席团 Presidium** | Membership in the department whose `kind = "presidium"` (any membership role) | Entire organization |
+| **主席团 Presidium** | Membership in the department whose `kind = "presidium"`. `role = "lead"` is **主席 President**, `role = "member"` is **副主席 Vice President** | Entire organization |
 | **部长 Department Lead** | `departmentMemberships.role = "lead"` in a regular department | That department |
 | **部员 Member** | `departmentMemberships.role = "member"` in a regular department | Self, plus shared spaces of their departments |
 | **Approved, no department** | `users.status = "approved"` with no memberships | Self, org-wide channels and shared files only |
@@ -17,8 +17,31 @@ Roles come from **department memberships**, except system admin, which is a flag
 Rules:
 
 - A user can belong to **multiple departments** and can be a lead in one and a member in another.
-- A regular department should have **1 to 2 leads**. The UI warns when a department has 0 or more than 2, but the server does not block it, so handovers don't get stuck.
+- A regular department has **at most 2 leads**; the server rejects a third with `TOO_MANY_LEADS`. The UI warns admins when a department has none.
 - There is exactly one presidium department, created by the seed script. Presidium members are super admins.
+
+### 主席 and 副主席
+
+- 主席团 has **at most one 主席**. Assigning a second throws `CHAIR_EXISTS`; the seat changes hands through `presidium.transferChair` instead.
+- Once there is a 主席, there is **always** one. Demoting, removing, retiring, or deactivating the 主席 throws `CHAIR_REQUIRED` until they hand the role over.
+- **Transfer:** only the current 主席 (or a system admin) can make a 副主席 the new 主席. The old 主席 becomes 副主席 in the same mutation. A 副主席 cannot make themselves 主席.
+- **Promote:** any presidium member can move a 部长 up into 主席团 as 副主席 (`presidium.promoteToViceChair`). Their 部长 seats are vacated.
+- **Retire:** a presidium member retires themselves (`presidium.retire`); a system admin can retire anyone. They leave 主席团 and get a `formerPresidium` row, shown on the roster as **前主席** (if they were ever 主席 this term, tracked by `departmentMemberships.wasChair`) or **前副主席**. Former members are read-only history and get no permissions.
+- **部长 promote 部员:** a lead can make a member of their own department a co-lead (within the 2-lead limit).
+
+### Typed confirmation
+
+Every promotion asks the user to type an exact Chinese phrase before the confirm button unlocks (UI only; the server enforces the rules above):
+
+| Action | Phrase |
+| --- | --- |
+| Make someone 部长 | `将{姓名}设为{部门中文名}部长` |
+| Make someone 副主席 (promote, add, or pre-approve) | `将{姓名}设为副主席` |
+| Make someone 主席 (transfer or first 主席) | `将{姓名}设为主席` |
+| Retire | `将{姓名}设为前主席` / `将{姓名}设为前副主席` |
+| Create a department | `将{部门中文名}设为新部门` |
+
+`{姓名}` is the Chinese name, falling back to the English name, Google name, then email (for pre-approvals, the email).
 - **System admin is a superset of presidium.** Anywhere these docs say "presidium can ...", the system admin can too, even without being in the presidium department. On top of that, only a system admin can grant or remove system admin from another user, and presidium cannot demote or deactivate a system admin. There must always be at least one system admin.
 - The system admin is a technical role (the person running the app). They may also hold a normal place in the hierarchy, for example as a member of 主席团 or a department.
 - **Admin** in these docs means "system admin or presidium".
@@ -104,7 +127,7 @@ Rules for agents:
 
 - **Never** check permissions only in React. UI hiding is a convenience, not security.
 - When a helper returns `via: "oversight"`, the calling function must call `logAudit(...)`.
-- Errors use `ConvexError` with a code: `"UNAUTHENTICATED" | "NOT_APPROVED" | "FORBIDDEN" | "NOT_FOUND" | "INVALID"`. The client maps codes to translated messages.
+- Errors use `ConvexError` with a code from `ERROR_CODES` in `convex/lib/constants.ts` (for example `"FORBIDDEN"`, `"INVALID"`, `"CHAIR_EXISTS"`). The client maps codes to translated messages.
 
 ## Permission matrix
 
@@ -119,12 +142,15 @@ Legend: Y = allowed, O = read via oversight (logged), Own = only their own, Dept
 | Pre-approve an email into a department as **member** | Y | Dept | N |
 | Pre-approve an email as **lead**, or into 主席团 | Y | N | N |
 | Revoke an unclaimed pre-approval | Y | Dept (only pre-approvals for their department) | N |
-| Approve or reject accounts | Y | Dept (and may only add them to their own department as member) | N |
-| Deactivate or reactivate an account | Y (not a system admin) | N | N |
+| Approve or reject accounts (approved applicants join as 部员) | Y | Dept (only into their own department) | N |
+| Deactivate or reactivate an account | Y (not a system admin, not the 主席) | N | N |
 | Grant or remove system admin | System admin only | N | N |
 | Create, rename, archive departments | Y | N | N |
-| Add or remove 主席团 members | Y | N | N |
-| Assign or remove department leads | Y | N | N |
+| Add someone to 主席团, or promote a 部长 to 副主席 | Y | N | N |
+| Make a 副主席 the 主席 | Current 主席 or system admin | N | N |
+| Retire from 主席团 | Self (system admin: anyone; 主席 must transfer first) | N | N |
+| Make a 部员 a 部长 | Y | Dept | N |
+| Demote or remove department leads | Y | N | N |
 | Add or remove department members | Y | Dept | N |
 | Edit own profile | Y | Y | Y |
 | View audit log | Y | N | N |

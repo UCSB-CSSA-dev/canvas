@@ -78,10 +78,12 @@ Convex file storage has plan-based limits and costs.
 - **Default:** a dedicated CSSA Google account (free Gmail, about 100 recipients per day).
 - Needed: which account, and whether CSSA has Google Workspace (higher limits).
 
-### Q12. Hosting and domain
+### Q12. Custom domain and account ownership
 
-- **Default:** Vercel free tier for Next.js, Convex free tier, `*.vercel.app` URL.
-- Needed: whether CSSA wants a custom domain, and who owns the Vercel and Convex accounts for continuity across officer terms.
+Hosting is decided (GitHub Pages static export + Convex Cloud, see Decided below).
+
+- **Default:** `https://ucsb-cssa-dev.github.io/canvas/`, Convex free tier.
+- Needed: whether CSSA wants a custom domain, and who owns the GitHub organization and Convex team for continuity across officer terms.
 
 ### Q13. Calendar and events
 
@@ -131,3 +133,5 @@ Record decisions here as `YYYY-MM-DD - Qn - decision - where documented`.
 - 2026-10-19 - System admin - the first account becomes system admin with full access (optional `BOOTSTRAP_ADMIN_EMAIL` lock) - [accounts-and-onboarding.md](features/accounts-and-onboarding.md#first-account-becomes-system-admin)
 - 2026-10-19 - Pre-approvals - admins and leads pre-approve emails into the hierarchy; those users skip the approval queue on first sign-in - [roster.md](features/roster.md#pre-approving-emails)
 - 2026-10-19 - Roster - every approved user can see the full hierarchy - [roster.md](features/roster.md)
+- 2026-10-19 - Q12 - Hosting: frontend as a Next.js static export on GitHub Pages (`UCSB-CSSA-dev/canvas`), deployed with Convex by GitHub Actions; code split into `frontend/` and `backend/` workspaces - [01-architecture.md](01-architecture.md#deployment)
+- 2026-10-19 - Chat access - department channel access is derived from `departmentMemberships`; `channelMembers` holds DM membership and read state only - [03-data-model.md](03-data-model.md#channels-and-channelmembers)

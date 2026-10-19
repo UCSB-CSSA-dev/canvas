@@ -68,7 +68,7 @@ Tabs:
 - **我发布的 Assigned by me** (leads and presidium): each assignment with progress like "5 / 8 已提交" and the number waiting for review.
 - **部门 Department** (leads and presidium): all assignments for the departments they lead, including those created by co-leads.
 
-### Assignment detail (`/assignments/[id]`)
+### Assignment detail (`/assignments/view/?a=<id>`)
 
 - For assignees: description, attachments, due date, their submission form (text, files, link), status, and the feedback thread.
 - For the creator and reviewers: a table of assignees with status, submitted time, late flag; clicking a row opens that submission with Approve and Request changes buttons and the comment thread.

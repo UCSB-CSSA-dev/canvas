@@ -12,7 +12,7 @@ A **roster** page shows the whole organization hierarchy (主席团, departments
 
 Access is limited to `@ucsb.edu` Google accounts. Every account must be **approved by an admin or lead**, or have its email **pre-approved** into a department beforehand. The first account ever created becomes the **system admin**. Officers have oversight over the content of the people they manage (see [Roles & Permissions](doc/02-roles-and-permissions.md)).
 
-> Status: **Planning / documentation.** No application code exists yet. Next up: **Stage 1** (app shell, hierarchy and roster, Google sign-in with pre-approvals, basic chat). See [doc/09-roadmap.md](doc/09-roadmap.md). The docs in `doc/` are the source of truth for what to build.
+> Status: **Stage 1 implemented** (app shell, hierarchy and roster, Google sign-in with pre-approvals, basic chat). Next up: Stage 2 (full chat and oversight). See [doc/09-roadmap.md](doc/09-roadmap.md). The docs in `doc/` are the source of truth for what to build.
 
 ---
 
@@ -20,12 +20,13 @@ Access is limited to `@ucsb.edu` Google accounts. Every account must be **approv
 
 | Layer | Choice |
 | --- | --- |
-| Frontend | Next.js (App Router), React, TypeScript |
+| Frontend | Next.js (App Router), React, TypeScript, built as a **static export** and hosted on GitHub Pages |
 | UI | TailwindCSS + shadcn/ui, dark theme (black / dark gray background, white text, gold accent) |
 | Backend | Convex (database, server functions, real-time subscriptions, file storage, crons) |
 | Auth | Convex Auth with Google OAuth, restricted to `@ucsb.edu`, admin approval or email pre-approval required |
-| Email | Google Apps Script web app that sends through Gmail, called from Convex actions |
-| i18n | `next-intl`, Chinese (`zh`) default, English (`en`) secondary, toggle in UI |
+| Email | Google Apps Script web app that sends through Gmail, called from Convex actions (Stage 3) |
+| i18n | `next-intl` (client-side), Chinese (`zh`) default, English (`en`) secondary, toggle in UI |
+| CI/CD | GitHub Actions: checks on every PR; on `main`, deploy Convex and publish the site to GitHub Pages |
 
 ---
 
@@ -71,7 +72,8 @@ These rules apply to any coding agent (Cursor, Claude, Codex, etc.) working in t
 - Follow [doc/08-conventions.md](doc/08-conventions.md) for structure and naming.
 - **Every Convex query, mutation, and action that touches user data must check permissions on the server** using the helpers described in `doc/02-roles-and-permissions.md`. Never rely on the UI to hide data.
 - Users with `status !== "approved"` may only call onboarding functions.
-- All user-facing strings go through `next-intl`. Add keys to **both** `messages/zh.json` and `messages/en.json`. Never hard-code display text in components.
+- All user-facing strings go through `next-intl`. Add keys to **both** `frontend/messages/zh.json` and `frontend/messages/en.json`. Never hard-code display text in components.
+- The frontend is a **static export** (GitHub Pages). Do not use middleware, server actions, route handlers, cookies, or dynamic route segments. Put IDs in query params (`/chat/?c=<channelId>`) and keep data access in Convex. See [doc/01-architecture.md](doc/01-architecture.md#static-export-constraints).
 - Use the design tokens in `doc/04-design-system.md`. Do not introduce new colors or fonts.
 - Use shadcn/ui components before writing custom ones.
 - Secrets (Apps Script URL, shared secret, OAuth credentials) live in Convex environment variables, never in the repo.
@@ -84,50 +86,79 @@ These rules apply to any coding agent (Cursor, Claude, Codex, etc.) working in t
 
 ---
 
-## Planned repository structure
+## Repository structure
+
+npm workspaces with two packages. The frontend imports the backend's generated API types and shared constants as `@cssa-hub/backend`.
 
 ```text
 .
-├── README.md                  # this file
-├── doc/                       # specifications (source of truth)
-├── app/                       # Next.js App Router
-│   └── [locale]/              # zh | en
-│       ├── (auth)/            # sign-in, pending-approval, disclosure
-│       └── (app)/             # authenticated shell with sidebar
-│           ├── chat/
-│           ├── roster/
-│           ├── files/
-│           ├── assignments/
-│           ├── admin/
-│           └── settings/
-├── components/
-│   ├── ui/                    # shadcn/ui generated components
-│   └── <feature>/             # feature components (chat, files, ...)
-├── convex/                    # Convex backend
-│   ├── schema.ts
-│   ├── auth.ts
-│   ├── lib/permissions.ts     # shared permission helpers
-│   ├── users.ts, departments.ts, memberships.ts, preApprovals.ts,
-│   ├── roster.ts, seed.ts, channels.ts, messages.ts,
-│   ├── files.ts, assignments.ts, notifications.ts, email.ts,
-│   ├── audit.ts
-│   └── crons.ts
-├── messages/                  # next-intl dictionaries
-│   ├── zh.json
-│   └── en.json
-├── google-apps-script/        # Apps Script source for the email relay
-│   └── Code.gs
-└── lib/                       # client utilities
+├── README.md                    # this file
+├── doc/                         # specifications (source of truth)
+├── .github/workflows/
+│   ├── ci.yml                   # lint, typecheck, tests, i18n check, static build
+│   └── deploy.yml               # main: Convex deploy + GitHub Pages
+├── backend/                     # @cssa-hub/backend (Convex)
+│   ├── convex/
+│   │   ├── schema.ts, auth.ts, auth.config.ts, http.ts
+│   │   ├── users.ts, departments.ts, memberships.ts, preApprovals.ts,
+│   │   ├── roster.ts, channels.ts, messages.ts, seed.ts
+│   │   ├── lib/                 # permissions, constants (shared with frontend), audit, ...
+│   │   └── _generated/          # committed; regenerated by `npx convex dev`
+│   └── tests/                   # convex-test + Vitest
+└── frontend/                    # @cssa-hub/frontend (Next.js static export)
+    ├── app/
+    │   ├── (auth)/              # sign-in, onboarding, pending, rejected
+    │   └── (app)/               # authenticated shell: chat, roster, settings
+    ├── components/
+    │   ├── ui/                  # shadcn/ui generated components
+    │   └── <feature>/           # auth, chat, roster, people, layout, providers
+    ├── lib/                     # api re-export, locale store, names, errors
+    ├── messages/                # zh.json, en.json
+    └── scripts/check-i18n.mjs
 ```
 
-## Getting started (once code exists)
+Later stages add `backend/convex/files.ts`, `assignments.ts`, `notifications.ts`, `email.ts`, `crons.ts`, and a `google-apps-script/` folder for the email relay.
+
+## Getting started (local development)
+
+Requires Node 22 (`.nvmrc`).
 
 ```bash
 npm install
-npx convex dev          # starts Convex dev deployment, generates types
-npm run dev             # starts Next.js on http://localhost:3000
+
+# 1. Link backend/ to your Convex project (writes backend/.env.local), once
+cd backend
+npx convex dev --configure existing --once
+
+# 2. Auth keys and settings on the dev deployment, once
+npx @convex-dev/auth --web-server-url http://localhost:3000   # JWT_PRIVATE_KEY, JWKS, SITE_URL
+npx convex env set AUTH_GOOGLE_ID <client id>
+npx convex env set AUTH_GOOGLE_SECRET <client secret>
+cd ..
+
+# 3. Every day: Convex (pushes functions on save) + Next.js on http://localhost:3000
+npm run dev
 ```
 
-Required Convex environment variables are listed in [doc/07-security-and-privacy.md](doc/07-security-and-privacy.md#secrets-and-environment-variables).
+The frontend reads `CONVEX_URL` from `backend/.env.local` automatically; `frontend/.env.local` is only needed to point at a different deployment. `npm run dev:backend` and `npm run dev:frontend` run the two halves separately.
+
+Google OAuth client (Google Cloud Console, "Web application"): add the authorized redirect URI `https://<deployment>.convex.site/api/auth/callback/google` (the `.convex.site` URL of each Convex deployment, dev and prod).
+
+Checks, same as CI: `npm run lint`, `npm run typecheck`, `npm test`, `npm run check:i18n`, `npm run build`.
+
+All environment variables are listed in [doc/07-security-and-privacy.md](doc/07-security-and-privacy.md#secrets-and-environment-variables).
 
 The **first account to sign in becomes system admin**. In production, set `BOOTSTRAP_ADMIN_EMAIL` so only the intended person can claim it.
+
+## Deployment (GitHub Pages + Convex)
+
+Pushing to `main` runs `.github/workflows/deploy.yml`: CI checks, then `npx convex deploy` (pushes schema and functions to the production deployment), then a static build of the frontend pointed at that deployment, published to `https://ucsb-cssa-dev.github.io/canvas/`.
+
+One-time setup:
+
+1. **GitHub Pages:** repo Settings > Pages > Source: **GitHub Actions**.
+2. **Secret `CONVEX_DEPLOY_KEY`:** Convex dashboard > production deployment > Settings > Deploy keys > generate a production key, then add it under repo Settings > Secrets and variables > Actions.
+3. **Production Convex environment variables** (`npx convex env set --prod ...` from `backend/`, or the dashboard): `SITE_URL=https://ucsb-cssa-dev.github.io/canvas` (include the base path, no trailing slash), `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `JWT_PRIVATE_KEY` and `JWKS` (run `npx @convex-dev/auth --prod`), and `BOOTSTRAP_ADMIN_EMAIL`.
+4. **Google OAuth:** add the production `https://<prod-deployment>.convex.site/api/auth/callback/google` redirect URI.
+
+The base path (`/canvas`) comes from `actions/configure-pages`, so it follows the repository name, and is empty if a custom domain is configured.

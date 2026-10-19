@@ -21,35 +21,36 @@ Stage 1 is fixed. Stages 2 to 5 are a proposal and can be reordered. Stage 4 is 
 ### In scope
 
 **Project setup**
-- [ ] Next.js (App Router, TypeScript) + Tailwind + shadcn/ui with the dark theme from [04-design-system.md](04-design-system.md). A rough UI is fine, but use the theme tokens from day one.
-- [ ] `next-intl` with `zh` default and `en`, plus the 中 / EN toggle ([05-i18n.md](05-i18n.md)). Set this up now; adding it later is expensive.
-- [ ] Convex project with the **Stage 1 tables** from [03-data-model.md](03-data-model.md): `users`, `departments`, `departmentMemberships`, `preApprovals`, `channels`, `channelMembers`, `messages`, `auditLogs`.
-- [ ] `convex/lib/permissions.ts` with the Stage 1 helpers and permission tests.
-- [ ] CI: lint, typecheck, tests, i18n key check.
+- [x] Next.js (App Router, TypeScript) + Tailwind + shadcn/ui with the dark theme from [04-design-system.md](04-design-system.md). A rough UI is fine, but use the theme tokens from day one.
+- [x] `next-intl` with `zh` default and `en`, plus the 中 / EN toggle ([05-i18n.md](05-i18n.md)). Set this up now; adding it later is expensive.
+- [x] Convex project with the **Stage 1 tables** from [03-data-model.md](03-data-model.md): `users`, `departments`, `departmentMemberships`, `preApprovals`, `channels`, `channelMembers`, `messages`, `auditLogs`.
+- [x] `backend/convex/lib/permissions.ts` with the Stage 1 helpers and permission tests.
+- [x] CI: lint, typecheck, tests, i18n key check, static build.
+- [x] Deploy: GitHub Actions deploys Convex and publishes the static site to GitHub Pages.
 
 **Sign-in and accounts** ([features/accounts-and-onboarding.md](features/accounts-and-onboarding.md))
-- [ ] Google OAuth through Convex Auth, verified `@ucsb.edu` emails only.
-- [ ] **First account becomes system admin** automatically (approved, full access to every page).
-- [ ] Short onboarding: 中文名, English name, and the oversight notice checkbox.
-- [ ] **Pre-approved emails** skip the approval queue and are placed straight into their department and role.
-- [ ] Other users wait on a "pending approval" screen. Admins and leads approve them from the roster page.
+- [x] Google OAuth through Convex Auth, verified `@ucsb.edu` emails only.
+- [x] **First account becomes system admin** automatically (approved, full access to every page).
+- [x] Short onboarding: 中文名, English name, and the oversight notice checkbox.
+- [x] **Pre-approved emails** skip the approval queue and are placed straight into their department and role.
+- [x] Other users wait on a "pending approval" screen. Admins and leads approve them from the roster page.
 
 **Hierarchy and roster** ([features/roster.md](features/roster.md))
-- [ ] Seed departments: 主席团, 活动部, 国际部, 宣传部. Admins can create and rename departments.
-- [ ] Roles: system admin, 主席团, 部长 (1 to 2 per department), 部员.
-- [ ] Roster page visible to every approved user: 主席团 at the top, then each department with its leads and members.
-- [ ] Admins and leads on the roster: pre-approve emails, approve pending users, add or remove members, change roles (within their permissions).
+- [x] Seed departments: 主席团, 活动部, 国际部, 宣传部. Admins can create and rename departments.
+- [x] Roles: system admin, 主席团, 部长 (1 to 2 per department), 部员.
+- [x] Roster page visible to every approved user: 主席团 at the top, then each department with its leads and members.
+- [x] Admins and leads on the roster: pre-approve emails, approve pending users, add or remove members, change roles (within their permissions).
 
 **Basic chat** ([features/chat.md](features/chat.md))
-- [ ] Channels: one org-wide channel (全体), one channel per department (membership synced from the hierarchy), and DMs.
-- [ ] Send text messages in real time; load older messages on scroll.
-- [ ] Unread badges and mark-as-read.
-- [ ] Start a DM from a person on the roster.
+- [x] Channels: one org-wide channel (全体), one channel per department (access derived from the hierarchy), and DMs.
+- [x] Send text messages in real time; load older messages with a "load older" button.
+- [x] Unread badges and mark-as-read.
+- [x] Start a DM from a person on the roster.
 
 **App shell**
-- [ ] Sidebar: Chat, Roster, Settings. Files and Assignments show as disabled "即将推出 / Coming soon" items.
-- [ ] Settings: profile names and language.
-- [ ] Mobile layout works at a basic level (bottom tabs or sheet).
+- [x] Sidebar: Chat, Roster, Settings. Files and Assignments show as disabled "即将推出 / Coming soon" items.
+- [x] Settings: profile names and language.
+- [x] Mobile layout works at a basic level (bottom tabs or sheet).
 
 ### Not in Stage 1
 
@@ -58,6 +59,8 @@ Deferred to later stages: group chats, announcement channels, attachments, menti
 Audit log **rows** are still written in Stage 1 for approvals, pre-approvals, and role changes, so history exists from the start. The viewer comes later.
 
 ### Exit criteria
+
+Check these on the deployed site with real Google accounts. The backend rules behind them are covered by `backend/tests/`.
 
 - [ ] The first person to sign in becomes system admin and can open every page.
 - [ ] An email pre-approved into 活动部 as 部员 signs in for the first time, completes the short onboarding, and appears under 活动部 on the roster without anyone approving them.

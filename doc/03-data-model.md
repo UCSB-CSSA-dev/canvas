@@ -1,6 +1,6 @@
 # 03 Data Model (Convex Schema Draft)
 
-This is the target `convex/schema.ts`. It is a draft: field names and indexes may be refined during implementation, but **any change must be reflected here**.
+This is the target `backend/convex/schema.ts` for all stages. It is a draft: field names and indexes may be refined during implementation, but **any change must be reflected here**. For what is deployed today, `backend/convex/schema.ts` is authoritative.
 
 Conventions:
 
@@ -15,12 +15,17 @@ Only create the tables for the current stage (see [09-roadmap.md](09-roadmap.md)
 
 | Stage | Tables |
 | --- | --- |
-| 1 | `users` (+ Convex Auth tables), `departments`, `departmentMemberships`, `preApprovals`, `channels`, `channelMembers`, `messages`, `auditLogs` |
+| 1 | `users` (+ Convex Auth tables), `departments`, `departmentMemberships`, `formerPresidium`, `deactivationRequests`, `preApprovals`, `channels`, `channelMembers`, `messages`, `auditLogs` |
 | 2 | `messageReactions`, `notifications` |
 | 3 | `folders`, `files`, `assignments`, `assignmentSubmissions`, `assignmentComments`, `emailJobs` |
 | 4 | TBA (likely embedding tables with vector indexes for AI features) |
 
-In Stage 1, `channels.type` only uses `"org"`, `"department"`, and `"dm"`, and `messages.attachments` / `mentionUserIds` stay empty arrays.
+Stage 1 implements a subset of the fields below and adds the rest when their stage starts:
+
+- `channels.type` is only `"org"`, `"department"`, or `"dm"`; there is no `name` or `archivedAt` yet, and `createdBy` is optional because seeded channels have no creator.
+- `channelMembers` has only `channelId`, `userId`, and `lastReadAt` (no `role` or `muted`).
+- `messages` has only `channelId`, `authorId`, and `body` (attachments, mentions, replies, edit, and delete come in Stage 2).
+- `departmentMemberships.addedBy` and `auditLogs.actorId` are optional so the seed and system events can write rows.
 
 ## Entity relationships
 
@@ -83,6 +88,9 @@ export default defineSchema({
     )),
     nameZh: v.optional(v.string()),           // 中文名
     nameEn: v.optional(v.string()),           // English name
+    bio: v.optional(v.string()),              // public, max 160 chars
+    avatarStorageId: v.optional(v.id("_storage")), // uploaded photo (256px JPEG)
+    avatarUrl: v.optional(v.string()),        // overrides the Google `image`, which sign-in rewrites
     wechatId: v.optional(v.string()),
     major: v.optional(v.string()),
     graduationYear: v.optional(v.number()),
@@ -139,13 +147,22 @@ export default defineSchema({
   departmentMemberships: defineTable({
     userId: v.id("users"),
     departmentId: v.id("departments"),
+    // In 主席团: "lead" = 主席, "member" = 副主席. Elsewhere: 部长 / 部员.
     role: v.union(v.literal("lead"), v.literal("member")),
     addedBy: v.id("users"),
+    wasChair: v.optional(v.boolean()),   // 主席团 only: was 主席 earlier this term
   })
     .index("by_user", ["userId"])
     .index("by_department", ["departmentId"])
     .index("by_department_role", ["departmentId", "role"])
     .index("by_user_department", ["userId", "departmentId"]),
+
+  // 前主席 / 前副主席: people who retired from 主席团.
+  formerPresidium: defineTable({
+    userId: v.id("users"),
+    role: v.union(v.literal("lead"), v.literal("member")),  // "lead" = 前主席
+    retiredAt: v.number(),
+  }).index("by_user", ["userId"]),
 
   // ---------- Chat ----------
   channels: defineTable({
@@ -353,16 +370,47 @@ export default defineSchema({
 ### departments
 
 - Seeded: 主席团 (`presidium`, kind `presidium`), plus regular departments such as 活动部 (`events`), 国际部 (`international`), 宣传部 (`publicity`). The full list is configurable by presidium.
-- Creating a department also creates its `department` channel, a department `announcement` channel, and a root department folder.
+- Creating a department also creates its `department` channel (Stage 1). Later stages also create a department `announcement` channel and a root department folder.
 
 ### departmentMemberships
 
-- Adding a membership also adds a `channelMembers` row for the department channel and announcement channel. Removing a membership removes those rows. Do both in the **same mutation**.
+- The source of truth for who belongs where. Access to department channels is **derived** from these rows at read time (see below), so adding or removing a membership needs no channel bookkeeping and can't drift.
+- Every write that can create a lead goes through `assignMembership` in `convex/lib/memberships.ts`, which enforces one 主席 (`CHAIR_EXISTS`, `CHAIR_REQUIRED`) and at most 2 leads per regular department (`TOO_MANY_LEADS`). See [02-roles-and-permissions.md](02-roles-and-permissions.md#主席-and-副主席).
+- A pre-approval for a lead seat that has filled up by the time the user signs in is claimed as `member` instead.
+
+### deactivationRequests
+
+```ts
+deactivationRequests: defineTable({
+  userId: v.id("users"),
+  reason: v.optional(v.string()),
+  status: v.union(v.literal("pending"), v.literal("approved"), v.literal("declined"), v.literal("cancelled")),
+  reviewedBy: v.optional(v.id("users")),
+  reviewedAt: v.optional(v.number()),
+  reviewNote: v.optional(v.string()),   // shown to the member
+})
+  .index("by_user", ["userId"])
+  .index("by_status", ["status"]),
+```
+
+- A member asks to deactivate their own account from `/settings`; admins review it on the roster. See [features/accounts-and-onboarding.md](features/accounts-and-onboarding.md#deactivation).
+- At most one `pending` request per user. Deactivating the user any other way also closes their pending request as `approved`.
+- From Stage 3, approving a request also records a keep-or-delete decision for each of the member's files (shape TBD with the files tables).
+
+### formerPresidium
+
+- Written by `presidium.retire`. Shown on the roster under 主席团 as 往届 with a 前主席 / 前副主席 badge. No permissions come from it.
+- Hidden while the person is back in 主席团; if someone has several rows, 前主席 wins.
 
 ### channels and channelMembers
 
+- Who can read a channel (`canReadChannel` in `backend/convex/lib/permissions.ts`):
+  - `org`: every approved user.
+  - `department`: admins, plus anyone with a `departmentMemberships` row for that department.
+  - `dm`: only the two users with a `channelMembers` row.
+- `channelMembers` therefore has two jobs: it is the **membership list for DMs** (both rows are created with the channel), and the **read state** (`lastReadAt`) for every channel. For `org` and `department` channels the row is created lazily the first time the user opens the channel or sends a message.
 - `dm` channels are unique per pair via `dmKey` (sorted user IDs joined with `:`).
-- Unread count = messages in channel with `_creationTime > channelMembers.lastReadAt` (cap the count at 99 when displaying).
+- Unread count = messages from other people with `_creationTime > lastReadAt`. With no row yet, `lastReadAt` defaults to the time the user was approved (or their account creation time). Displayed as `99+` above 99.
 - Oversight readers are **not** added to `channelMembers`.
 
 ### messages

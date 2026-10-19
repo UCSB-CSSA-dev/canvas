@@ -38,7 +38,7 @@ stateDiagram-v2
   pending --> approved: approved on roster, or email gets pre-approved
   pending --> rejected: admin or lead rejects
   rejected --> pending: user re-applies
-  approved --> deactivated: admin deactivates
+  approved --> deactivated: admin deactivates, or approves the member's own request
   deactivated --> approved: admin reactivates
 ```
 
@@ -58,7 +58,7 @@ The system admin's row is created as `approved`, but they still see the onboardi
 - The client passes the `hd=ucsb.edu` parameter so Google's account picker prefers UCSB accounts. **This hint is not security.**
 - Server check: in the Convex Auth `profile` / `createOrUpdateUser` callback, reject unless `email` ends with `@ucsb.edu` (case-insensitive) and Google reports the email as verified. The rejected user sees a translated error on `/sign-in`: "仅限 @ucsb.edu 邮箱登录 / Only @ucsb.edu accounts can sign in."
 - Always store and compare emails **lowercased**.
-- On first sign-in: create the user with `status = "new"`, `locale` from the current UI locale (default `zh`), and default `emailPrefs` (all `true`), unless the first-account rule below applies.
+- On first sign-in: create the user with `status = "new"`, `locale = "zh"` (updated by the language toggle), and default `emailPrefs` (all `true`), unless the first-account rule below applies.
 
 ## First account becomes system admin
 
@@ -126,14 +126,23 @@ If `oversightConsentVersion < CURRENT_CONSENT_VERSION`, an approved user sees a 
 
 ## Deactivation
 
-- Admins only, and a system admin cannot be deactivated by presidium. Used when a member leaves CSSA.
+- Admins deactivate from the person drawer. A system admin cannot be deactivated (they hand system admin over first), and neither can the 主席 (`CHAIR_REQUIRED`). Used when a member leaves CSSA.
 - Sets `status = "deactivated"`. The user keeps their data, but every function rejects them.
+
+### Requesting deactivation yourself
+
+- `/settings` has a "停用账号 / Deactivate account" card below the oversight notice. The member can add an optional reason and submits a request (`deactivationRequests.request`); they can withdraw it while it is pending (`deactivationRequests.cancel`).
+- System admins and the 主席 see why they can't request yet instead of the button.
+- 主席团 sees the request in a "停用申请 / Deactivation requests" section on the roster, and the Roster nav item shows a count badge (`users.viewer.reviewCount`, which also counts pending applicants). Email notification comes with Stage 3.
+- Reviewing (`deactivationRequests.review`) shows the reason, the member's departments, and a **files** section. Approving needs the typed phrase `将{姓名}设为停用` and deactivates the account; declining keeps it and shows the optional note to the member in settings. An admin cannot review their own request.
+- **Files (Stage 3):** the review dialog will list every file the member uploaded so 主席团 can keep each one (moved into the department's folder) or delete it. Until files exist, the section is a placeholder.
 - Their messages and files remain visible to others. Their name shows with a "(已停用 / Deactivated)" tag.
 - Removing all department memberships is a separate optional step in the same dialog.
 
 ## Profile and settings (`/settings`)
 
-- Stage 1: edit `nameZh` and `nameEn`; language preference (also stored in a cookie for the locale switch). Email and Google avatar come from Google and are read-only.
+- Stage 1: edit `nameZh`, `nameEn`, and a short `bio` (160 chars); upload a profile photo (cropped to a 256px square JPEG in the browser, stored in Convex file storage, and shown instead of the Google photo until removed); language preference (also stored in `localStorage` for the locale switch). Email comes from Google and is read-only.
+- The photo, names, and bio are **public profile data**: visible to every member and shown on CSSA's public website. The profile card and the privacy policy (`/privacy/`) both say so. The bio shows in the person drawer on the roster.
 - Later stages: `wechatId`, `major`, `graduationYear`, email preferences, and "Who can see my content 谁能看到我的内容" (the disclosure text plus the live list of users who currently oversee the viewer).
 
 ## Acceptance criteria
@@ -147,3 +156,4 @@ If `oversightConsentVersion < CURRENT_CONSENT_VERSION`, an approved user sees a 
 - [ ] A lead can approve only applicants who requested their department, and only as members of it.
 - [ ] Approvals, rejections, and pre-approval claims all write audit rows.
 - [ ] Deactivated users lose access on their next request.
+- [ ] A member can request deactivation; 主席团 sees it on the roster and can approve (typed phrase) or decline with a note.

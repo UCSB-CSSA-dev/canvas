@@ -16,7 +16,7 @@ Stage 1 builds only basic text chat. Everything else in this doc is Stage 2 (see
 | Unread badges, mark as read | Mute, search, notifications |
 | Start a DM from the roster or a "new DM" picker | Oversight section and banner |
 
-Department channel membership is synced from the hierarchy from day one: being added to a department on the roster (or through a pre-approval) gives access to its channel immediately, and removal takes it away. Admins can read and post in every department channel in Stage 1, because they can open every page.
+Department channel access follows the hierarchy from day one: it is derived from `departmentMemberships` on every read, so being added to a department on the roster (or through a pre-approval) gives access to its channel immediately, and removal takes it away. Admins can read and post in every department channel in Stage 1, because they can open every page. See [03-data-model.md](../03-data-model.md#channels-and-channelmembers).
 
 ## Channel types
 
@@ -29,7 +29,7 @@ Department channel membership is synced from the hierarchy from day one: being a
 | `group` | Any approved user | Chosen members (2 or more besides creator) | Members | Custom name, required |
 | `dm` | Any approved user | Exactly 2 | Both | Other person's name |
 
-"Implicit" membership: for `org` and org-wide `announcement` channels, don't store a `channelMembers` row per user up front. Create the row lazily the first time a user opens the channel (it holds `lastReadAt` and `muted`).
+"Implicit" and "synced" membership: for `org`, `department`, and `announcement` channels, access is computed from the user's status and department memberships, not stored. A `channelMembers` row is created lazily the first time a user opens the channel (it holds `lastReadAt`, and `muted` from Stage 2). `group` and `dm` channels store their members explicitly in `channelMembers`.
 
 ## Layout
 

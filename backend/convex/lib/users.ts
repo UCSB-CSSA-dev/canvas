@@ -4,6 +4,7 @@ import { logAudit } from "./audit";
 import { ensureSeed } from "./departments";
 import { isAllowedEmail, normalizeEmail } from "./email";
 import { appError } from "./errors";
+import { cancelProposalsOf, trackLeadership } from "./groups";
 import { findMembership, getPresidium } from "./memberships";
 
 export type UserSummary = {
@@ -59,7 +60,18 @@ export async function deactivateUser(
     throw appError("CHAIR_REQUIRED");
   }
 
-  await ctx.db.patch("users", target._id, { status: "deactivated" });
+  const ledIds = (
+    await ctx.db
+      .query("departmentMemberships")
+      .withIndex("by_user", (q) => q.eq("userId", target._id))
+      .collect()
+  )
+    .filter((m) => m.role === "lead")
+    .map((m) => m.departmentId);
+  await trackLeadership(ctx, ledIds, args.actorId, () =>
+    ctx.db.patch("users", target._id, { status: "deactivated" }),
+  );
+  await cancelProposalsOf(ctx, target._id);
   const pending = await ctx.db
     .query("deactivationRequests")
     .withIndex("by_user", (q) => q.eq("userId", target._id))
@@ -110,12 +122,11 @@ export async function upsertUserFromOAuth(
         .query("users")
         .withIndex("email", (q) => q.eq("email", email))
         .first();
+  await ensureSeed(ctx);
   if (existing) {
     await ctx.db.patch("users", existing._id, { name, image, email });
     return existing._id;
   }
-
-  await ensureSeed(ctx);
 
   const existingAdmin = await ctx.db
     .query("users")

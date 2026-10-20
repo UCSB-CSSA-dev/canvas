@@ -4,16 +4,13 @@ import { useQuery } from "convex/react";
 import { ArrowLeftIcon } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { Suspense } from "react";
-import { ChannelList } from "@/components/chat/channel-list";
-import { Composer } from "@/components/chat/composer";
-import { MessageView } from "@/components/chat/message-view";
-import { channelName } from "@/components/chat/types";
+import { ChannelList, OversightList } from "@/components/chat/channel-list";
+import { ChatRoom } from "@/components/chat/chat-room";
 import { PageHeader } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/api";
-import type { Locale } from "@/lib/locale-store";
+import { api, type Id } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
@@ -26,57 +23,68 @@ export default function ChatPage() {
 
 function Chat() {
   const t = useTranslations("chat");
-  const locale = useLocale() as Locale;
-  const requestedId = useSearchParams().get("c");
+  const params = useSearchParams();
+  const requestedId = params.get("c") as Id<"channels"> | null;
+  const oversee = params.get("oversee") as Id<"users"> | null;
+  const focus = params.get("m") as Id<"messages"> | null;
+  const app = params.get("app") as Id<"chatApps"> | null;
   const lists = useQuery(api.channels.listMine);
 
-  const all = lists ? [...lists.org, ...lists.departments, ...lists.dms] : [];
-  // Desktop falls back to the org channel; mobile shows the list until one is picked.
-  const active = all.find((c) => c._id === requestedId) ?? (lists?.org[0] ?? null);
-  const showConversationOnMobile = requestedId !== null && active?._id === requestedId;
+  // Wide screens fall back to the org channel; below `lg` the list shows until one is picked.
+  const activeId = requestedId ?? (oversee ? null : (lists?.org[0]?._id ?? null));
+  const detail = useQuery(api.channels.get, activeId ? { channelId: activeId } : "skip");
+  const showConversationOnMobile = requestedId !== null;
+  const backHref = oversee ? `/chat/?oversee=${oversee}` : "/chat/";
 
   return (
     <div className="flex min-h-0 flex-1">
       <div
         className={cn(
-          "min-h-0 w-full flex-col border-r border-border md:flex md:w-64",
+          "min-h-0 w-full flex-col border-r border-border lg:flex lg:w-64",
           showConversationOnMobile ? "hidden" : "flex",
         )}
       >
-        <PageHeader title={t("title")} />
-        {lists ? <ChannelList lists={lists} activeId={active?._id ?? null} /> : null}
+        {oversee ? (
+          <OversightList userId={oversee} activeId={activeId} />
+        ) : (
+          <>
+            <PageHeader title={t("title")} />
+            {lists ? <ChannelList lists={lists} activeId={activeId} /> : null}
+          </>
+        )}
       </div>
       <section
-        className={cn(
-          "min-h-0 min-w-0 flex-1 flex-col md:flex",
-          showConversationOnMobile ? "flex" : "hidden",
-        )}
+        className={cn("min-h-0 min-w-0 flex-1 flex-col lg:flex", showConversationOnMobile ? "flex" : "hidden")}
       >
-        {active ? (
-          <>
-            <PageHeader
-              title={
-                <span className="flex items-center gap-2">
-                  <Button asChild size="icon-sm" variant="ghost" className="md:hidden" aria-label={t("title")}>
-                    <Link href="/chat/">
-                      <ArrowLeftIcon />
-                    </Link>
-                  </Button>
-                  {channelName(active, locale, t("general"))}
-                </span>
-              }
-            />
-            <MessageView key={active._id} channel={active} />
-            <Composer
-              key={`composer-${active._id}`}
-              channelId={active._id}
-              channelLabel={channelName(active, locale, t("general"))}
-            />
-          </>
+        {detail ? (
+          <ChatRoom
+            key={`${detail._id}:${focus ?? ""}:${app ?? ""}`}
+            channel={detail}
+            backHref={backHref}
+            initialFocus={focus}
+            initialApp={app}
+          />
+        ) : detail === null ? (
+          <NoAccess backHref={backHref} />
         ) : (
-          <p className="m-auto text-sm text-muted-foreground">{lists ? t("selectChannel") : null}</p>
+          <p className="m-auto text-sm text-muted-foreground">{lists && !activeId ? t("selectChannel") : null}</p>
         )}
       </section>
+    </div>
+  );
+}
+
+function NoAccess({ backHref }: { backHref: string }) {
+  const t = useTranslations("chat");
+  return (
+    <div className="m-auto flex flex-col items-center gap-3 p-6 text-center">
+      <p className="text-sm text-muted-foreground">{t("noAccess")}</p>
+      <Button asChild size="sm" variant="secondary">
+        <Link href={backHref}>
+          <ArrowLeftIcon />
+          {t("backToChats")}
+        </Link>
+      </Button>
     </div>
   );
 }

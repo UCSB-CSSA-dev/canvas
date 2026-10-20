@@ -47,9 +47,11 @@ export function useViewer(): Viewer {
  */
 export function AccountGate({
   allow,
+  brandedLoading = false,
   children,
 }: {
   allow: AccountRoute[];
+  brandedLoading?: boolean;
   children: ReactNode;
 }) {
   const router = useRouter();
@@ -60,7 +62,7 @@ export function AccountGate({
     if (route !== null && !allow.includes(route)) router.replace(ROUTE_PATHS[route]);
   }, [route, allow, router]);
 
-  if (!allowed) return <FullPageLoading />;
+  if (!allowed) return <FullPageLoading branded={brandedLoading} />;
   return <ViewerContext value={viewer}>{children}</ViewerContext>;
 }
 
@@ -71,5 +73,5 @@ export function RootRedirect() {
   useEffect(() => {
     if (route !== null) router.replace(ROUTE_PATHS[route]);
   }, [route, router]);
-  return <FullPageLoading />;
+  return <FullPageLoading branded />;
 }

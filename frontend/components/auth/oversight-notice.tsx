@@ -3,7 +3,7 @@
 import { EyeIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-/** The bilingual-by-locale oversight disclosure shown at signup and in settings. */
+/** The oversight and data disclosure shown at signup (and again when it changes) and in settings. */
 export function OversightNotice() {
   const t = useTranslations("onboarding");
   return (
@@ -16,8 +16,16 @@ export function OversightNotice() {
       <ul className="list-disc space-y-1.5 pl-5">
         <li>{t("noticePresidium")}</li>
         <li>{t("noticeLead")}</li>
+        <li>{t("noticeIcon")}</li>
         <li>{t("noticeAudit")}</li>
         <li>{t("noticePrivate")}</li>
+      </ul>
+      <h3 className="mt-3 mb-1.5 font-medium">{t("noticeDataTitle")}</h3>
+      <ul className="list-disc space-y-1.5 pl-5 text-muted-foreground">
+        <li>{t("noticeRetention")}</li>
+        <li>{t("noticeRecall")}</li>
+        <li>{t("noticeFiles")}</li>
+        <li>{t("noticeProfile")}</li>
       </ul>
     </section>
   );

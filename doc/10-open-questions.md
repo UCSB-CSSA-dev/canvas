@@ -28,19 +28,7 @@ Who can read messages sent by a department lead?
 - **Default:** yes, leads can approve applicants who requested their department, as members only. Presidium can approve anyone.
 - Alternative: presidium only.
 
-### Q4. Should participants know when an oversight view happens?
-
-- **Default:** no live notice. Users accept the disclosure at signup, and the audit log records each view (presidium can read it).
-- Alternative: show participants "this chat was viewed by an overseer" or let users see the audit entries about themselves.
-
 ## Content and retention
-
-### Q5. Deleted message content
-
-When a message is soft deleted, is the original text kept?
-
-- **Default:** the row and original `body` are kept in the database and visible only to presidium (as "deleted content") for moderation. Everyone else sees "消息已删除".
-- Alternative: clear `body` and attachments on delete (true deletion).
 
 ### Q6. Officer term handover and old data
 
@@ -135,3 +123,10 @@ Record decisions here as `YYYY-MM-DD - Qn - decision - where documented`.
 - 2026-10-19 - Roster - every approved user can see the full hierarchy - [roster.md](features/roster.md)
 - 2026-10-19 - Q12 - Hosting: frontend as a Next.js static export on GitHub Pages (`UCSB-CSSA-dev/canvas`), deployed with Convex by GitHub Actions; code split into `frontend/` and `backend/` workspaces - [01-architecture.md](01-architecture.md#deployment)
 - 2026-10-19 - Chat access - department channel access is derived from `departmentMemberships`; `channelMembers` holds DM membership and read state only - [03-data-model.md](03-data-model.md#channels-and-channelmembers)
+- 2026-10-20 - Q4 - no per-view notice; every monitored chat shows an icon (top right) whose tooltip lists who can view it, and existing users re-accept the updated notice - [09-roadmap.md](09-roadmap.md#stage-2-full-chat-and-oversight-完整聊天与监督)
+- 2026-10-20 - Q5 - authors can't delete; they can recall within 5 minutes (content erased, "{name} 撤回了一条消息" kept) and edit with a public edit history; 主席团 can remove any message (content erased, audit logged) - [09-roadmap.md](09-roadmap.md#stage-2-full-chat-and-oversight-完整聊天与监督)
+- 2026-10-20 - Retention - messages kept 15 days by default, extendable per chat to 1, 3, 6, or 12 months; attachments (15 MB max) always deleted after 15 days - [09-roadmap.md](09-roadmap.md#stage-2-full-chat-and-oversight-完整聊天与监督)
+- 2026-10-20 - Reactions - fixed set of 8 emoji; members can react in announcement channels - [09-roadmap.md](09-roadmap.md#stage-2-full-chat-and-oversight-完整聊天与监督)
+- 2026-10-20 - Chat apps - 接龙, 投票 (named or anonymous, result visibility chosen by the starter), and 集会 (weekly availability); leaders start them, members propose for approval by a leader in that chat - [09-roadmap.md](09-roadmap.md#29-chat-apps-接龙-投票-集会)
+- 2026-10-20 - Group chats - 部员 propose groups with involved departments; one 部长 of an involved department (or 主席团 / system admin) approves and picks members; involved departments' 部长 are members automatically and add their own members - [09-roadmap.md](09-roadmap.md#22-group-chats-and-announcement-channels)
+- 2026-10-20 - Multi-select - combined forward (合并转发) as a snapshot, and delete locally on this browser only - [09-roadmap.md](09-roadmap.md#28-multi-select-forward-delete-locally)

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { logAudit } from "./lib/audit";
 import { appError } from "./lib/errors";
+import { trackLeadership } from "./lib/groups";
 import { departmentLeads, findMembership, getPresidium } from "./lib/memberships";
 import { requireAdmin, requireApproved } from "./lib/permissions";
 
@@ -60,13 +61,20 @@ export const promoteToViceChair = mutation({
     const leadSeats = memberships.filter((m) => m.role === "lead");
     if (leadSeats.length === 0) throw appError("INVALID", "not_a_lead");
 
-    for (const seat of leadSeats) await ctx.db.delete("departmentMemberships", seat._id);
-    await ctx.db.insert("departmentMemberships", {
-      userId: target._id,
-      departmentId: presidium._id,
-      role: "member",
-      addedBy: viewer.user._id,
-    });
+    await trackLeadership(
+      ctx,
+      leadSeats.map((m) => m.departmentId),
+      viewer.user._id,
+      async () => {
+        for (const seat of leadSeats) await ctx.db.delete("departmentMemberships", seat._id);
+        await ctx.db.insert("departmentMemberships", {
+          userId: target._id,
+          departmentId: presidium._id,
+          role: "member",
+          addedBy: viewer.user._id,
+        });
+      },
+    );
     await logAudit(ctx, {
       actorId: viewer.user._id,
       action: "presidium.promote",

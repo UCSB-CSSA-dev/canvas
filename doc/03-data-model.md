@@ -16,15 +16,14 @@ Only create the tables for the current stage (see [09-roadmap.md](09-roadmap.md)
 | Stage | Tables |
 | --- | --- |
 | 1 | `users` (+ Convex Auth tables), `departments`, `departmentMemberships`, `formerPresidium`, `deactivationRequests`, `preApprovals`, `channels`, `channelMembers`, `messages`, `auditLogs` |
-| 2 | `messageReactions`, `notifications` |
+| 2 | `groupDepartments`, `groupProposals`, `messageEdits`, `messageReactions`, `attachments`, `chatApps`, `chatAppResponses`, `notifications`, `pushSubscriptions` |
 | 3 | `folders`, `files`, `assignments`, `assignmentSubmissions`, `assignmentComments`, `emailJobs` |
 | 4 | TBA (likely embedding tables with vector indexes for AI features) |
 
-Stage 1 implements a subset of the fields below and adds the rest when their stage starts:
+The chat tables below match what Stage 2 deployed. Notes:
 
-- `channels.type` is only `"org"`, `"department"`, or `"dm"`; there is no `name` or `archivedAt` yet, and `createdBy` is optional because seeded channels have no creator.
-- `channelMembers` has only `channelId`, `userId`, and `lastReadAt` (no `role` or `muted`).
-- `messages` has only `channelId`, `authorId`, and `body` (attachments, mentions, replies, edit, and delete come in Stage 2).
+- Stage 2 fields on `channels`, `channelMembers`, and `messages` are optional so Stage 1 rows stay valid. `channels.createdBy` is optional because seeded channels have no creator.
+- Departments are archived with `departments.archivedAt`; channels have no archive flag of their own (an archived department makes its channels read-only).
 - `departmentMemberships.addedBy` and `auditLogs.actorId` are optional so the seed and system events can write rows.
 
 ## Entity relationships
@@ -164,32 +163,63 @@ export default defineSchema({
     retiredAt: v.number(),
   }).index("by_user", ["userId"]),
 
-  // ---------- Chat ----------
+  // ---------- Chat (deployed in Stage 2) ----------
   channels: defineTable({
     type: v.union(
       v.literal("org"),            // org-wide general channel
-      v.literal("department"),     // one per department, auto-membership
       v.literal("announcement"),   // org-wide (departmentId unset) or per department
-      v.literal("group"),          // user-created group chat
+      v.literal("department"),     // one per department, access derived from memberships
+      v.literal("group"),          // group chat belonging to departments
       v.literal("dm"),             // exactly two members
     ),
-    name: v.optional(v.string()),            // group chats; others derive name
+    name: v.optional(v.string()),            // group chats; others derive their name
     departmentId: v.optional(v.id("departments")),
     dmKey: v.optional(v.string()),           // sorted "userIdA:userIdB" for DM uniqueness
-    createdBy: v.id("users"),
+    createdBy: v.optional(v.id("users")),
     lastMessageAt: v.optional(v.number()),
-    archivedAt: v.optional(v.number()),
+    retentionDays: v.optional(v.number()),   // unset = 15
+    purpose: v.optional(v.string()),         // groups
+    proposalId: v.optional(v.id("groupProposals")),
+    endedAt: v.optional(v.number()),         // groups: read-only once set
   })
     .index("by_type", ["type"])
     .index("by_department", ["departmentId"])
     .index("by_dmKey", ["dmKey"]),
 
+  // Departments involved in a group; their 部长 are members automatically.
+  groupDepartments: defineTable({
+    channelId: v.id("channels"),
+    departmentId: v.id("departments"),
+  })
+    .index("by_channel", ["channelId"])
+    .index("by_department", ["departmentId"]),
+
+  groupProposals: defineTable({
+    proposerId: v.id("users"),
+    name: v.string(),
+    purpose: v.string(),
+    departmentIds: v.array(v.id("departments")),
+    suggestedUserIds: v.array(v.id("users")),
+    status: v.union(
+      v.literal("pending"), v.literal("approved"), v.literal("rejected"),
+      v.literal("cancelled"), v.literal("expired"),
+    ),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    channelId: v.optional(v.id("channels")),
+    expiresAt: v.number(),
+  })
+    .index("by_proposer", ["proposerId"])
+    .index("by_status", ["status"]),
+
   channelMembers: defineTable({
     channelId: v.id("channels"),
     userId: v.id("users"),
-    role: v.union(v.literal("admin"), v.literal("member")), // group chat admin
     lastReadAt: v.number(),
-    muted: v.boolean(),
+    muted: v.optional(v.boolean()),
+    joinedAt: v.optional(v.number()),        // explicit DM and group members only
+    addedBy: v.optional(v.id("users")),
   })
     .index("by_channel", ["channelId"])
     .index("by_user", ["userId"])
@@ -198,17 +228,26 @@ export default defineSchema({
   messages: defineTable({
     channelId: v.id("channels"),
     authorId: v.id("users"),
-    body: v.string(),                        // plain text with lightweight markdown
-    attachments: v.array(attachment),
-    mentionUserIds: v.array(v.id("users")),
+    body: v.string(),                        // lightweight markdown; mentions as <@id> / <@all>
+    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"))),
+    mentionUserIds: v.optional(v.array(v.id("users"))),
+    mentionAll: v.optional(v.boolean()),
     replyToId: v.optional(v.id("messages")),
     editedAt: v.optional(v.number()),
-    deletedAt: v.optional(v.number()),
-    deletedBy: v.optional(v.id("users")),
+    recalledAt: v.optional(v.number()),
+    removedAt: v.optional(v.number()),
+    removedBy: v.optional(v.id("users")),
+    searchText: v.optional(v.string()),      // lowercased, CJK split into bigrams
+    system: v.optional(v.object({ event: v.string(), params: v.any() })),
+    forward: v.optional(v.any()),            // snapshot of forwarded messages
   })
     .index("by_channel", ["channelId"])                 // ordered by _creationTime
-    .index("by_author", ["authorId"])
-    .searchIndex("search_body", { searchField: "body", filterFields: ["channelId"] }),
+    .searchIndex("search_text", { searchField: "searchText", filterFields: ["channelId"] }),
+
+  messageEdits: defineTable({                // earlier versions of edited messages
+    messageId: v.id("messages"),
+    body: v.string(),
+  }).index("by_message", ["messageId"]),
 
   messageReactions: defineTable({
     messageId: v.id("messages"),
@@ -217,6 +256,47 @@ export default defineSchema({
   })
     .index("by_message", ["messageId"])
     .index("by_message_user_emoji", ["messageId", "userId", "emoji"]),
+
+  attachments: defineTable({                 // chat files; deleted 15 days after sending
+    storageId: v.id("_storage"),
+    thumbStorageId: v.optional(v.id("_storage")),
+    name: v.string(),
+    size: v.number(),
+    contentType: v.string(),
+    uploaderId: v.id("users"),
+    messageId: v.optional(v.id("messages")),
+    expiresAt: v.number(),
+    expiredAt: v.optional(v.number()),       // files deleted; row kept for the "expired" card
+  })
+    .index("by_message", ["messageId"])
+    .index("by_expiry", ["expiredAt", "expiresAt"]),
+
+  chatApps: defineTable({                    // 接龙 / 投票 / 集会
+    channelId: v.id("channels"),
+    kind: v.union(v.literal("signup"), v.literal("poll"), v.literal("meeting")),
+    status: v.union(
+      v.literal("proposed"), v.literal("active"), v.literal("closed"),
+      v.literal("rejected"), v.literal("cancelled"),
+    ),
+    title: v.string(),
+    description: v.optional(v.string()),
+    config: v.any(),
+    createdBy: v.id("users"),
+    approvedBy: v.optional(v.id("users")),
+    rejectReason: v.optional(v.string()),
+    deadline: v.optional(v.number()),
+    closedAt: v.optional(v.number()),
+    confirmedSlot: v.optional(v.number()),   // 集会: chosen start slot
+  }).index("by_channel_status", ["channelId", "status"]),
+
+  chatAppResponses: defineTable({            // one per person per app
+    appId: v.id("chatApps"),
+    userId: v.id("users"),
+    data: v.any(),
+  })
+    .index("by_app", ["appId"])
+    .index("by_app_user", ["appId", "userId"])
+    .index("by_user", ["userId"]),
 
   // ---------- Files ----------
   folders: defineTable({
@@ -301,24 +381,31 @@ export default defineSchema({
   // ---------- Notifications and email ----------
   notifications: defineTable({
     userId: v.id("users"),
-    type: v.union(
-      v.literal("account_approved"),
-      v.literal("account_rejected"),
-      v.literal("mention"),
-      v.literal("assignment_new"),
-      v.literal("assignment_due_soon"),
-      v.literal("assignment_overdue"),
-      v.literal("submission_received"),
-      v.literal("submission_reviewed"),
-      v.literal("added_to_department"),
-      v.literal("announcement"),
-    ),
+    // Stage 2 types (NOTIFICATION_TYPES in lib/constants.ts): mention, reply, announcement,
+    // added_to_group, added_to_department, deactivation_reviewed, group_proposed,
+    // group_approved, group_rejected, group_expired, group_takeover, app_proposed,
+    // app_approved, app_rejected, app_due_soon. Stage 3 adds the assignment types.
+    type: notificationType,
     params: v.any(),                  // values interpolated into the translated message
-    link: v.optional(v.string()),     // in-app path without locale, e.g. "/assignments/abc"
+    link: v.optional(v.string()),     // in-app path, e.g. "/chat/?c=<id>&m=<id>"
     readAt: v.optional(v.number()),
+    messageId: v.optional(v.id("messages")), // deleted with the message on recall
   })
     .index("by_user", ["userId"])
-    .index("by_user_read", ["userId", "readAt"]),
+    .index("by_user_read", ["userId", "readAt"])
+    .index("by_readAt", ["readAt"])
+    .index("by_message", ["messageId"]),
+
+  // Web Push subscriptions, one per browser or home-screen app. An endpoint belongs to whoever
+  // subscribed on it last; removed on sign-out, from Settings, or when the push service says it's gone.
+  pushSubscriptions: defineTable({
+    userId: v.id("users"),
+    endpoint: v.string(),             // https URL of the browser's push service
+    p256dh: v.string(),               // payload encryption keys from PushSubscription.toJSON()
+    auth: v.string(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_endpoint", ["endpoint"]),
 
   emailJobs: defineTable({
     to: v.string(),
@@ -404,18 +491,23 @@ deactivationRequests: defineTable({
 
 ### channels and channelMembers
 
-- Who can read a channel (`canReadChannel` in `backend/convex/lib/permissions.ts`):
-  - `org`: every approved user.
-  - `department`: admins, plus anyone with a `departmentMemberships` row for that department.
+- Who can read a channel is decided by `channelAccess` in `backend/convex/lib/channels.ts` (see [02-roles-and-permissions.md](02-roles-and-permissions.md#chat-permission-matrix)):
+  - `org` and the org-wide `announcement`: every approved user.
+  - `department` and department `announcement`: anyone with a `departmentMemberships` row for that department, plus admins.
+  - `group`: explicit members (`channelMembers.joinedAt` set), the 部长 of every department in `groupDepartments`, and 主席团 while any involved department is archived or has no 部长.
   - `dm`: only the two users with a `channelMembers` row.
-- `channelMembers` therefore has two jobs: it is the **membership list for DMs** (both rows are created with the channel), and the **read state** (`lastReadAt`) for every channel. For `org` and `department` channels the row is created lazily the first time the user opens the channel or sends a message.
+  - Anyone else who oversees a participant reads through oversight (read-only).
+- `channelMembers` therefore has two jobs: it is the **membership list for DMs and groups** (rows with `joinedAt`), and the **read state** (`lastReadAt`, `muted`) for every channel. For derived channels the row is created lazily the first time the user opens the channel or sends a message.
+- `retentionDays` (unset = 15) drives the hourly purge; ended groups are deleted entirely once their retention has passed.
 - `dm` channels are unique per pair via `dmKey` (sorted user IDs joined with `:`).
 - Unread count = messages from other people with `_creationTime > lastReadAt`. With no row yet, `lastReadAt` defaults to the time the user was approved (or their account creation time). Displayed as `99+` above 99.
 - Oversight readers are **not** added to `channelMembers`.
 
 ### messages
 
-- Soft delete keeps the row: `deletedAt` and `deletedBy` are set and normal viewers see "消息已删除 / Message deleted". Whether the original body is kept for presidium is an [open question](10-open-questions.md).
+- There is no delete. Recall (author, 5 minutes) and moderation removal (主席团) keep the row but erase the body, mentions, reactions, edit history, attachments, and related notifications; `recalledAt` or `removedAt` / `removedBy` record what happened.
+- Edits copy the previous body into `messageEdits` and set `editedAt`.
+- `kind: "system"` rows carry `system.event` and `params` and are translated on the client; `kind: "forward"` rows carry a snapshot in `forward`.
 - Paginate with `.withIndex("by_channel", q => q.eq("channelId", id)).order("desc").paginate(opts)`.
 
 ### folders and files

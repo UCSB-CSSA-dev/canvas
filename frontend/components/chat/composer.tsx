@@ -1,55 +1,409 @@
 "use client";
 
-import { useMutation } from "convex/react";
-import { SendIcon } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { useState, type KeyboardEvent } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { EyeIcon, FileIcon, LoaderIcon, LockIcon, PaperclipIcon, PencilIcon, ReplyIcon, SendIcon, XIcon } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import { toast } from "sonner";
+import { PersonAvatar } from "@/components/people/person-avatar";
+import { matchesPerson } from "@/components/people/use-people";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { api, LIMITS, type Id } from "@/lib/api";
+import { api, LIMITS, mentionToken, type Id } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
+import { thumbnail, uploadBlob } from "@/lib/image";
+import type { Locale } from "@/lib/locale-store";
+import { displayName } from "@/lib/names";
+import { cn } from "@/lib/utils";
+import { formatBytes } from "./attachments";
+import { useChat } from "./chat-context";
+import { usePlainPreview } from "./markdown";
+import { personById, type Person } from "./types";
 
-export function Composer({ channelId, channelLabel }: { channelId: Id<"channels">; channelLabel: string }) {
+const THUMBNAIL_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]);
+
+type Upload = {
+  key: string;
+  name: string;
+  size: number;
+  previewUrl?: string;
+  attachmentId?: Id<"attachments">;
+  failed?: boolean;
+};
+
+/** "@Name" labels in the textarea map to `<@id>` tokens when sending. */
+type MentionMap = Map<string, string>;
+
+function encodeMentions(text: string, mentions: MentionMap) {
+  let result = text;
+  const labels = [...mentions.keys()].sort((a, b) => b.length - a.length);
+  for (const label of labels) result = result.split(`@${label}`).join(mentionToken(mentions.get(label)!));
+  return result;
+}
+
+export function Composer({ placeholder }: { placeholder: string }) {
+  const { channel } = useChat();
   const t = useTranslations("chat");
+
+  if (channel.access.via === "oversight") {
+    return (
+      <Banner icon={<EyeIcon className="size-4" />} tone="gold">
+        {t("oversightBanner")}
+      </Banner>
+    );
+  }
+  if (channel.access.readOnly) {
+    return <Banner icon={<LockIcon className="size-4" />}>{t(`readOnly.${channel.access.readOnly}`)}</Banner>;
+  }
+  if (!channel.access.canPost) {
+    return <Banner icon={<LockIcon className="size-4" />}>{t("announcementOnly")}</Banner>;
+  }
+  return <Editor key={channel._id} placeholder={placeholder} />;
+}
+
+function Banner({ icon, children, tone }: { icon: ReactNode; children: ReactNode; tone?: "gold" }) {
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-center gap-2 border-t border-border px-4 py-3 text-center text-sm",
+        tone === "gold" ? "bg-primary/10 text-primary" : "text-muted-foreground",
+      )}
+    >
+      {icon}
+      {children}
+    </div>
+  );
+}
+
+function Editor({ placeholder }: { placeholder: string }) {
+  const t = useTranslations("chat");
+  const locale = useLocale() as Locale;
+  const { channel, replyTo, setReplyTo, editing, setEditing } = useChat();
   const send = useMutation(api.messages.send);
+  const edit = useMutation(api.messages.edit);
+  const generateUploadUrl = useMutation(api.attachments.generateUploadUrl);
+  const register = useMutation(api.attachments.register);
+  const discard = useMutation(api.attachments.discard);
+  const participants = useQuery(api.channels.participants, { channelId: channel._id });
   const showError = useErrorToast();
+  const preview = usePlainPreview();
+
   const [body, setBody] = useState("");
+  const [mentions, setMentions] = useState<MentionMap>(new Map());
+  const [uploads, setUploads] = useState<Upload[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [draftBeforeEdit, setDraftBeforeEdit] = useState<{ body: string; mentions: MentionMap } | null>(null);
+  const [loadedEditId, setLoadedEditId] = useState<string | null>(null);
 
-  const trimmed = body.trim();
-  const tooLong = trimmed.length > LIMITS.messageBody;
-  const canSend = trimmed.length > 0 && !tooLong;
+  // Entering edit mode loads the message with mention tokens shown as "@Name".
+  if (editing && editing._id !== loadedEditId) {
+    const map: MentionMap = new Map();
+    const text = editing.body.replace(/<@([a-z0-9]+)>/gi, (_, id: string) => {
+      const label = id === "all" ? t("mentionAll") : displayName(personById(editing.people, id), locale);
+      map.set(label, id);
+      return `@${label}`;
+    });
+    setLoadedEditId(editing._id);
+    if (loadedEditId === null) setDraftBeforeEdit({ body, mentions });
+    setBody(text);
+    setMentions(map);
+  } else if (!editing && loadedEditId !== null) {
+    // Leaving edit mode (saved, cancelled, or replaced by a reply) brings back the earlier draft.
+    setLoadedEditId(null);
+    setBody(draftBeforeEdit?.body ?? "");
+    setMentions(draftBeforeEdit?.mentions ?? new Map());
+    setDraftBeforeEdit(null);
+  }
 
-  const submit = () => {
-    if (!canSend) return;
-    const text = body;
+  useEffect(() => {
+    if (editing) textareaRef.current?.focus();
+  }, [editing]);
+
+  useEffect(() => {
+    if (replyTo) textareaRef.current?.focus();
+  }, [replyTo]);
+
+  const candidates = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const people: (Person | "all")[] = (participants ?? []).filter((p) => matchesPerson(p, mentionQuery));
+    if (channel.access.canMentionAll && (t("mentionAll").includes(mentionQuery) || "all".includes(mentionQuery.toLowerCase()))) {
+      people.unshift("all");
+    }
+    return people.slice(0, 8);
+  }, [mentionQuery, participants, channel.access.canMentionAll, t]);
+
+  const uploading = uploads.some((u) => !u.attachmentId && !u.failed);
+  const readyIds = uploads.flatMap((u) => (u.attachmentId ? [u.attachmentId] : []));
+  const encoded = encodeMentions(body, mentions).trim();
+  const tooLong = encoded.length > LIMITS.messageBody;
+  const canSend = !uploading && !tooLong && (encoded.length > 0 || (!editing && readyIds.length > 0));
+
+  const resetDraft = () => {
     setBody("");
-    send({ channelId, body: text }).catch((error) => {
-      setBody(text);
+    setMentions(new Map());
+  };
+
+  const submit = async () => {
+    if (!canSend) return;
+    if (editing) {
+      const target = editing;
+      try {
+        await edit({ messageId: target._id, body: encoded });
+        setEditing(null);
+      } catch (error) {
+        showError(error);
+      }
+      return;
+    }
+    const snapshot = { body, mentions, uploads, replyTo };
+    resetDraft();
+    setUploads([]);
+    setReplyTo(null);
+    try {
+      await send({
+        channelId: channel._id,
+        body: encoded,
+        replyToId: snapshot.replyTo?._id,
+        attachmentIds: readyIds.length ? readyIds : undefined,
+      });
+    } catch (error) {
+      setBody(snapshot.body);
+      setMentions(snapshot.mentions);
+      setUploads(snapshot.uploads);
+      setReplyTo(snapshot.replyTo);
       showError(error);
+    }
+  };
+
+  const cancelEdit = () => setEditing(null);
+
+  const updateMentionQuery = (text: string, caret: number) => {
+    const match = /(?:^|\s)@([^\s@]{0,20})$/.exec(text.slice(0, caret));
+    setMentionQuery(match ? match[1] : null);
+    setMentionIndex(0);
+  };
+
+  const pickMention = (choice: Person | "all") => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const caret = el.selectionStart;
+    const before = body.slice(0, caret).replace(/@([^\s@]{0,20})$/, "");
+    const label = choice === "all" ? t("mentionAll") : displayName(choice, locale);
+    const id = choice === "all" ? "all" : choice._id;
+    const next = `${before}@${label} ${body.slice(caret)}`;
+    setBody(next);
+    setMentions((m) => new Map(m).set(label, id));
+    setMentionQuery(null);
+    requestAnimationFrame(() => {
+      const position = before.length + label.length + 2;
+      el.focus();
+      el.setSelectionRange(position, position);
     });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery !== null && candidates.length > 0) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        setMentionIndex((i) => (i + delta + candidates.length) % candidates.length);
+        return;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        pickMention(candidates[mentionIndex]);
+        return;
+      }
+      if (event.key === "Escape") {
+        setMentionQuery(null);
+        return;
+      }
+    }
+    if (event.key === "Escape") {
+      if (editing) cancelEdit();
+      else if (replyTo) setReplyTo(null);
+      return;
+    }
     // isComposing: Enter confirms a Chinese IME candidate, it must not send.
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
-      submit();
+      void submit();
     }
   };
 
+  const addFiles = (files: File[]) => {
+    for (const file of files) {
+      if (uploads.length + files.length > LIMITS.attachmentsPerMessage) {
+        toast.error(t("tooManyFiles", { max: LIMITS.attachmentsPerMessage }));
+        return;
+      }
+      if (file.size > LIMITS.attachmentBytes) {
+        toast.error(t("fileTooLarge", { name: file.name }), { duration: 8000 });
+        continue;
+      }
+      const key = `${file.name}-${file.size}-${Math.random()}`;
+      const isImage = THUMBNAIL_TYPES.has(file.type);
+      setUploads((list) => [
+        ...list,
+        { key, name: file.name, size: file.size, previewUrl: isImage ? URL.createObjectURL(file) : undefined },
+      ]);
+      void (async () => {
+        try {
+          const storageId = await uploadBlob(await generateUploadUrl(), file);
+          let thumbStorageId: string | undefined;
+          if (isImage) {
+            try {
+              thumbStorageId = await uploadBlob(await generateUploadUrl(), await thumbnail(file));
+            } catch {
+              thumbStorageId = undefined;
+            }
+          }
+          const attachmentId = await register({
+            storageId: storageId as Id<"_storage">,
+            thumbStorageId: thumbStorageId as Id<"_storage"> | undefined,
+            name: file.name,
+          });
+          setUploads((list) => list.map((u) => (u.key === key ? { ...u, attachmentId } : u)));
+        } catch (error) {
+          setUploads((list) => list.map((u) => (u.key === key ? { ...u, failed: true } : u)));
+          showError(error);
+        }
+      })();
+    }
+  };
+
+  const removeUpload = (upload: Upload) => {
+    setUploads((list) => list.filter((u) => u.key !== upload.key));
+    if (upload.previewUrl) URL.revokeObjectURL(upload.previewUrl);
+    if (upload.attachmentId) void discard({ attachmentId: upload.attachmentId }).catch(() => undefined);
+  };
+
+  const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (editing) return;
+    const files = [...event.clipboardData.files];
+    if (files.length > 0) {
+      event.preventDefault();
+      addFiles(files);
+    }
+  };
+
+  const onFileInput = (event: ChangeEvent<HTMLInputElement>) => {
+    addFiles([...(event.target.files ?? [])]);
+    event.target.value = "";
+  };
+
   return (
-    <div className="shrink-0 border-t border-border p-3">
+    <div className="relative shrink-0 border-t border-border p-3">
+      {mentionQuery !== null && candidates.length > 0 ? (
+        <div className="absolute bottom-full left-3 z-20 mb-1 w-72 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+          {candidates.map((c, i) => (
+            <button
+              key={c === "all" ? "all" : c._id}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pickMention(c);
+              }}
+              className={cn(
+                "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm",
+                i === mentionIndex ? "bg-accent" : "hover:bg-accent",
+              )}
+            >
+              {c === "all" ? (
+                <span className="flex size-6 items-center justify-center rounded-full bg-primary/20 text-xs text-primary">@</span>
+              ) : (
+                <PersonAvatar person={c} className="size-6" />
+              )}
+              <span className="truncate">{c === "all" ? t("mentionAllHint") : displayName(c, locale)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {editing || replyTo ? (
+        <div className="mb-2 flex items-center gap-2 rounded-md bg-secondary/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+          {editing ? <PencilIcon className="size-3.5" /> : <ReplyIcon className="size-3.5" />}
+          <span className="min-w-0 flex-1 truncate">
+            {editing
+              ? t("editingMessage")
+              : t("replyingTo", {
+                  name: displayName(personById(replyTo!.people, replyTo!.authorId), locale),
+                  text: preview(replyTo!.body, replyTo!.people, 60) || t("attachmentOnly"),
+                })}
+          </span>
+          <Button size="icon-xs" variant="ghost" aria-label={t("cancel")} onClick={editing ? cancelEdit : () => setReplyTo(null)}>
+            <XIcon />
+          </Button>
+        </div>
+      ) : null}
+
+      {uploads.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {uploads.map((u) => (
+            <div key={u.key} className="relative flex items-center gap-2 rounded-md border border-border bg-secondary/40 py-1 pr-7 pl-1 text-xs">
+              {u.previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- local object URL preview
+                <img src={u.previewUrl} alt="" className="size-9 rounded object-cover" />
+              ) : (
+                <FileIcon className="m-2 size-5 text-muted-foreground" />
+              )}
+              <div className="min-w-0">
+                <div className="max-w-36 truncate">{u.name}</div>
+                <div className={cn("text-[11px]", u.failed ? "text-destructive" : "text-muted-foreground")}>
+                  {u.failed ? t("uploadFailed") : u.attachmentId ? formatBytes(u.size) : t("uploading")}
+                </div>
+              </div>
+              {!u.attachmentId && !u.failed ? <LoaderIcon className="size-3.5 animate-spin" /> : null}
+              <button
+                type="button"
+                aria-label={t("removeFile")}
+                onClick={() => removeUpload(u)}
+                className="absolute top-1 right-1 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex items-end gap-2">
+        {!editing ? (
+          <>
+            <input ref={fileRef} type="file" multiple hidden onChange={onFileInput} />
+            <Button size="icon-lg" variant="ghost" aria-label={t("attach")} onClick={() => fileRef.current?.click()}>
+              <PaperclipIcon />
+            </Button>
+          </>
+        ) : null}
         <Textarea
+          ref={textareaRef}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => {
+            setBody(e.target.value);
+            updateMentionQuery(e.target.value, e.target.selectionStart);
+          }}
           onKeyDown={onKeyDown}
-          placeholder={t("placeholder", { channel: channelLabel })}
-          aria-label={t("placeholder", { channel: channelLabel })}
+          onPaste={onPaste}
+          onBlur={() => setTimeout(() => setMentionQuery(null), 150)}
+          placeholder={placeholder}
+          aria-label={placeholder}
           rows={1}
           className="max-h-40 min-h-9 resize-none"
         />
-        <Button size="icon-lg" onClick={submit} disabled={!canSend} aria-label={t("send")}>
+        <Button size="icon-lg" onClick={() => void submit()} disabled={!canSend} aria-label={editing ? t("saveEdit") : t("send")}>
           <SendIcon />
         </Button>
       </div>

@@ -1,8 +1,9 @@
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { NOTIFICATION_TYPES } from "./lib/constants";
 
-// Stage 1 tables only. See doc/03-data-model.md for the full target schema.
+// Stage 1 and 2 tables. See doc/03-data-model.md for the full target schema.
 
 export const userStatus = v.union(
   v.literal("new"),
@@ -15,6 +16,18 @@ export const userStatus = v.union(
 export const membershipRole = v.union(v.literal("lead"), v.literal("member"));
 
 export const locale = v.union(v.literal("zh"), v.literal("en"));
+
+export const channelType = v.union(
+  v.literal("org"),
+  v.literal("announcement"),
+  v.literal("department"),
+  v.literal("group"),
+  v.literal("dm"),
+);
+
+export const notificationType = v.union(
+  ...NOTIFICATION_TYPES.map((type) => v.literal(type)),
+);
 
 export default defineSchema({
   ...authTables,
@@ -115,22 +128,65 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   channels: defineTable({
-    type: v.union(v.literal("org"), v.literal("department"), v.literal("dm")),
+    type: channelType,
+    /** Group chats only; other types derive their name. */
+    name: v.optional(v.string()),
+    /** department and announcement channels; unset on the org-wide announcement channel. */
     departmentId: v.optional(v.id("departments")),
     dmKey: v.optional(v.string()),
     createdBy: v.optional(v.id("users")),
     lastMessageAt: v.optional(v.number()),
+    /** Messages older than this are purged. Unset means LIMITS.defaultRetentionDays. */
+    retentionDays: v.optional(v.number()),
+    // Group chats
+    purpose: v.optional(v.string()),
+    proposalId: v.optional(v.id("groupProposals")),
+    endedAt: v.optional(v.number()),
   })
     .index("by_type", ["type"])
     .index("by_department", ["departmentId"])
     .index("by_dmKey", ["dmKey"]),
 
-  // Read state for every channel a user has opened, plus membership for DMs.
-  // Access to org and department channels is derived from departmentMemberships.
+  /** Departments involved in a group chat. Their 部长 are members automatically. */
+  groupDepartments: defineTable({
+    channelId: v.id("channels"),
+    departmentId: v.id("departments"),
+  })
+    .index("by_channel", ["channelId"])
+    .index("by_department", ["departmentId"]),
+
+  groupProposals: defineTable({
+    proposerId: v.id("users"),
+    name: v.string(),
+    purpose: v.string(),
+    departmentIds: v.array(v.id("departments")),
+    suggestedUserIds: v.array(v.id("users")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("cancelled"),
+      v.literal("expired"),
+    ),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    reviewNote: v.optional(v.string()),
+    channelId: v.optional(v.id("channels")),
+    expiresAt: v.number(),
+  })
+    .index("by_proposer", ["proposerId"])
+    .index("by_status", ["status"]),
+
+  // Read state for every channel a user has opened, plus explicit membership for DMs and groups.
+  // Access to org, announcement, and department channels is derived from departmentMemberships.
   channelMembers: defineTable({
     channelId: v.id("channels"),
     userId: v.id("users"),
     lastReadAt: v.number(),
+    muted: v.optional(v.boolean()),
+    /** Set for explicit DM and group members; read-state-only rows leave it unset. */
+    joinedAt: v.optional(v.number()),
+    addedBy: v.optional(v.id("users")),
   })
     .index("by_channel", ["channelId"])
     .index("by_user", ["userId"])
@@ -140,7 +196,109 @@ export default defineSchema({
     channelId: v.id("channels"),
     authorId: v.id("users"),
     body: v.string(),
-  }).index("by_channel", ["channelId"]),
+    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"))),
+    mentionUserIds: v.optional(v.array(v.id("users"))),
+    mentionAll: v.optional(v.boolean()),
+    replyToId: v.optional(v.id("messages")),
+    editedAt: v.optional(v.number()),
+    recalledAt: v.optional(v.number()),
+    removedAt: v.optional(v.number()),
+    removedBy: v.optional(v.id("users")),
+    /** Lowercased body with CJK split into bigrams, for the search index. */
+    searchText: v.optional(v.string()),
+    /** kind "system": event name and params, translated on the client. */
+    system: v.optional(v.object({ event: v.string(), params: v.any() })),
+    /** kind "forward": snapshot of the forwarded messages. */
+    forward: v.optional(v.any()),
+  })
+    .index("by_channel", ["channelId"])
+    .searchIndex("search_text", { searchField: "searchText", filterFields: ["channelId"] }),
+
+  /** Earlier versions of edited messages. */
+  messageEdits: defineTable({
+    messageId: v.id("messages"),
+    body: v.string(),
+  }).index("by_message", ["messageId"]),
+
+  messageReactions: defineTable({
+    messageId: v.id("messages"),
+    userId: v.id("users"),
+    emoji: v.string(),
+  })
+    .index("by_message", ["messageId"])
+    .index("by_message_user_emoji", ["messageId", "userId", "emoji"]),
+
+  /** Uploaded chat files. Unsent uploads expire after a day, sent ones 15 days after sending. */
+  attachments: defineTable({
+    storageId: v.id("_storage"),
+    thumbStorageId: v.optional(v.id("_storage")),
+    name: v.string(),
+    size: v.number(),
+    contentType: v.string(),
+    uploaderId: v.id("users"),
+    messageId: v.optional(v.id("messages")),
+    expiresAt: v.number(),
+    /** Set once the stored files are deleted. */
+    expiredAt: v.optional(v.number()),
+  })
+    .index("by_message", ["messageId"])
+    .index("by_expiry", ["expiredAt", "expiresAt"]),
+
+  notifications: defineTable({
+    userId: v.id("users"),
+    type: notificationType,
+    params: v.any(),
+    /** In-app path, e.g. "/chat/?c=<id>&m=<id>". */
+    link: v.optional(v.string()),
+    readAt: v.optional(v.number()),
+    messageId: v.optional(v.id("messages")),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_read", ["userId", "readAt"])
+    .index("by_readAt", ["readAt"])
+    .index("by_message", ["messageId"]),
+
+  /** Web Push subscriptions, one per browser or installed home-screen app. */
+  pushSubscriptions: defineTable({
+    userId: v.id("users"),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_endpoint", ["endpoint"]),
+
+  // 接龙 (signup), 投票 (poll), 集会 (meeting) inside a chat.
+  chatApps: defineTable({
+    channelId: v.id("channels"),
+    kind: v.union(v.literal("signup"), v.literal("poll"), v.literal("meeting")),
+    status: v.union(
+      v.literal("proposed"),
+      v.literal("active"),
+      v.literal("closed"),
+      v.literal("rejected"),
+      v.literal("cancelled"),
+    ),
+    title: v.string(),
+    description: v.optional(v.string()),
+    config: v.any(),
+    createdBy: v.id("users"),
+    approvedBy: v.optional(v.id("users")),
+    rejectReason: v.optional(v.string()),
+    deadline: v.optional(v.number()),
+    closedAt: v.optional(v.number()),
+    /** 集会: the chosen start slot index. */
+    confirmedSlot: v.optional(v.number()),
+  }).index("by_channel_status", ["channelId", "status"]),
+
+  chatAppResponses: defineTable({
+    appId: v.id("chatApps"),
+    userId: v.id("users"),
+    data: v.any(),
+  })
+    .index("by_app", ["appId"])
+    .index("by_app_user", ["appId", "userId"])
+    .index("by_user", ["userId"]),
 
   auditLogs: defineTable({
     actorId: v.optional(v.id("users")),

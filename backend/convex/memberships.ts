@@ -2,7 +2,9 @@ import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { logAudit } from "./lib/audit";
 import { appError } from "./lib/errors";
+import { trackLeadership } from "./lib/groups";
 import { assignMembership, findMembership } from "./lib/memberships";
+import { notify } from "./lib/notify";
 import { isLeadOf, requireApproved } from "./lib/permissions";
 import { membershipRole } from "./schema";
 
@@ -22,13 +24,22 @@ export const add = mutation({
     const existing = await findMembership(ctx, target._id, department._id);
     if (existing && !viewer.isAdmin) throw appError("INVALID", "already_member");
 
-    const result = await assignMembership(ctx, {
-      userId: target._id,
-      department,
-      role: args.role,
-      addedBy: viewer.user._id,
-    });
+    const result = await trackLeadership(ctx, [department._id], viewer.user._id, () =>
+      assignMembership(ctx, {
+        userId: target._id,
+        department,
+        role: args.role,
+        addedBy: viewer.user._id,
+      }),
+    );
     if (result === "unchanged") return;
+    if (result === "created" && target._id !== viewer.user._id) {
+      await notify(ctx, target._id, {
+        type: "added_to_department",
+        params: { actorId: viewer.user._id, departmentId: department._id, role: args.role },
+        link: "/roster/",
+      });
+    }
     await logAudit(ctx, {
       actorId: viewer.user._id,
       action: result === "created" ? "membership.add" : "membership.role_change",
@@ -57,7 +68,9 @@ export const remove = mutation({
       throw appError("CHAIR_REQUIRED");
     }
 
-    await ctx.db.delete("departmentMemberships", membership._id);
+    await trackLeadership(ctx, [membership.departmentId], viewer.user._id, () =>
+      ctx.db.delete("departmentMemberships", membership._id),
+    );
     await logAudit(ctx, {
       actorId: viewer.user._id,
       action: "membership.remove",
@@ -91,7 +104,9 @@ export const setRole = mutation({
     if (!viewer.isAdmin && !leadPromoting) throw appError("FORBIDDEN");
     if (membership.role === args.role) return;
 
-    await assignMembership(ctx, { userId: membership.userId, department, role: args.role });
+    await trackLeadership(ctx, [department._id], viewer.user._id, () =>
+      assignMembership(ctx, { userId: membership.userId, department, role: args.role }),
+    );
     await logAudit(ctx, {
       actorId: viewer.user._id,
       action: "membership.role_change",

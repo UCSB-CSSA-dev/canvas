@@ -134,6 +134,9 @@ npx convex dev --configure existing --once
 npx @convex-dev/auth --web-server-url http://localhost:3000   # JWT_PRIVATE_KEY, JWKS, SITE_URL
 npx convex env set AUTH_GOOGLE_ID <client id>
 npx convex env set AUTH_GOOGLE_SECRET <client secret>
+npx web-push generate-vapid-keys            # then set both keys for push notifications:
+npx convex env set VAPID_PUBLIC_KEY <public key>
+npx convex env set VAPID_PRIVATE_KEY <private key>
 cd ..
 
 # 3. Every day: Convex (pushes functions on save) + Next.js on http://localhost:3000
@@ -158,7 +161,7 @@ One-time setup:
 
 1. **GitHub Pages:** repo Settings > Pages > Source: **GitHub Actions**.
 2. **Secret `CONVEX_DEPLOY_KEY`:** Convex dashboard > production deployment > Settings > Deploy keys > generate a production key, then add it under repo Settings > Secrets and variables > Actions.
-3. **Production Convex environment variables** (`npx convex env set --prod ...` from `backend/`, or the dashboard): `SITE_URL=https://ucsb-cssa-dev.github.io/canvas` (include the base path, no trailing slash), `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `JWT_PRIVATE_KEY` and `JWKS` (run `npx @convex-dev/auth --prod`), and `BOOTSTRAP_ADMIN_EMAIL`.
+3. **Production Convex environment variables** (`npx convex env set --prod ...` from `backend/`, or the dashboard): `SITE_URL=https://ucsb-cssa-dev.github.io/canvas` (include the base path, no trailing slash), `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `JWT_PRIVATE_KEY` and `JWKS` (run `npx @convex-dev/auth --prod`), `BOOTSTRAP_ADMIN_EMAIL`, and the push notification keys `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (generate a pair with `npx web-push generate-vapid-keys` in `backend/`; use a different pair than dev).
 4. **Google OAuth:** add the production `https://<prod-deployment>.convex.site/api/auth/callback/google` redirect URI.
 
 The base path (`/canvas`) comes from `actions/configure-pages`, so it follows the repository name, and is empty if a custom domain is configured.

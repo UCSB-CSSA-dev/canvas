@@ -34,7 +34,8 @@ describe("chat", () => {
 
     const bobView = await bob.as.query(api.messages.list, { channelId: eventsId, paginationOpts: page });
     expect(bobView.page.map((m) => m.body)).toEqual(["明天见"]);
-    expect(bobView.page[0].author?.email).toBe("alice@ucsb.edu");
+    const first = bobView.page[0];
+    expect(first.people.find((p) => p._id === first.authorId)?.email).toBe("alice@ucsb.edu");
 
     const bobChannels = await bob.as.query(api.channels.listMine, {});
     expect(bobChannels.departments[0].unread).toBe(1);

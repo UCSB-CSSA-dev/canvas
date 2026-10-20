@@ -25,9 +25,9 @@
 
 1. Load the viewer once per function with `requireApproved(ctx)`.
 2. Load the target document, return `NOT_FOUND` if missing **or** if the viewer cannot read it (don't reveal existence).
-3. Check the specific action with a helper (`canPostInChannel`, `canWriteFolder`, ...). Throw `FORBIDDEN` when it fails.
+3. Check the specific action with a helper (`channelAccess` flags such as `canPost` or `canModerate`, `canWriteFolder`, ...). Throw `FORBIDDEN` when it fails, or `READ_ONLY` for read-only chats.
 4. When access is granted through oversight, write an audit log entry (from a mutation; queries can't write).
-5. Validate all arguments with Convex validators (`v.*`). Validate lengths and limits (message 4,000 characters, title 120, file 25 MB).
+5. Validate all arguments with Convex validators (`v.*`). Validate lengths and limits (message 4,000 characters, title 120, chat attachment 15 MB, Files 25 MB). Limits live in `LIMITS` in `convex/lib/constants.ts`.
 6. Never accept a `userId` argument to mean "act as this user". The acting user always comes from `ctx.auth`.
 7. Use `internalMutation` / `internalAction` for anything the client must not call directly (email, notification fan-out, crons, seed).
 
@@ -56,6 +56,8 @@ Never commit secrets. `.env.local` is gitignored.
 | `EMAIL_DRY_RUN` | `true` in dev to skip real sending |
 | `ALLOWED_EMAIL_DOMAIN` | `ucsb.edu` (configurable for testing) |
 | `BOOTSTRAP_ADMIN_EMAIL` | Optional. If set, only this email can become the first system admin. Strongly recommended in prod |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Web Push key pair (`npx web-push generate-vapid-keys`). The public key is served to browsers by `push.config`; the private key signs pushes and must stay in Convex. Without them push is off |
+| `VAPID_SUBJECT` | Optional `mailto:` contact sent to push services. Defaults to `mailto:noreply@ucsb.edu` |
 
 ### Frontend build variables (`frontend/.env.local`, or set by CI)
 
@@ -82,9 +84,12 @@ These are inlined into the static bundle at build time, so they must never hold 
 
 - **Disclosure first.** Oversight is explained before the account exists and is always visible in Settings. See the exact text in [02-roles-and-permissions.md](02-roles-and-permissions.md#signup-disclosure-必须同意).
 - **Data minimization.** Collect only what is in the onboarding form. No phone numbers or student IDs.
-- **Retention defaults** (subject to [open questions](10-open-questions.md)):
-  - Messages and files: kept until deleted, then 30 days in trash (files) before purge.
-  - Notifications: 90 days.
+- **Retention defaults:**
+  - Chat messages: 15 days by default; admins and 部长 can extend a chat to 30, 90, 180, or 365 days. Purged hourly with their reactions and edit history.
+  - Chat attachments: 15 days after sending, regardless of chat retention. Their URLs work for anyone with the link until then, which the notice discloses.
+  - Recalled and moderator-removed messages: content erased immediately; only the placeholder row remains.
+  - Files (Stage 3): kept until deleted, then 30 days in trash before purge.
+  - Notifications: read ones are deleted after 90 days.
   - Email jobs: 30 days after sending.
   - Audit logs: kept indefinitely (at least 2 years).
 - **Leaving CSSA.** Deactivated users' content stays for organizational continuity. A user can ask presidium to delete their personal files; presidium can do this through the admin console (logged).

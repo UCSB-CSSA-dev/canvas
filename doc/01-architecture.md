@@ -70,7 +70,7 @@ The system admin can open every route.
 ### Layout
 
 - `frontend/app/(auth)/...`: centered card layout for sign-in, onboarding, pending, rejected, with the language toggle in the corner.
-- `frontend/app/(app)/layout.tsx`: authenticated shell with a left sidebar (Stage 1: Chat, Roster, Settings, with Files and Assignments shown as disabled "coming soon" items; later: Notifications, Admin when allowed) and the main content area. Below the `md` breakpoint the sidebar becomes a bottom tab bar. See [04-design-system.md](04-design-system.md).
+- `frontend/app/(app)/layout.tsx`: authenticated shell with a left sidebar and the main content area. The sidebar lists Chat, Notifications and Roster (Files and Assignments are disabled "coming soon" items); a "管理 Admin" group pinned to the bottom holds the admin overview (admins and 部长) and the audit log (admins only); Settings is a gear button next to the viewer's name in the footer. Below the `md` breakpoint the sidebar becomes a bottom tab bar with Chat, Notifications, Roster, Admin (when allowed) and Settings. See [04-design-system.md](04-design-system.md).
 - Every page is wrapped in `AccountGate` (`frontend/components/auth/account-state.tsx`). It reads `useConvexAuth()` and `api.users.viewer`, works out the account state (`signedOut`, `onboarding`, `pending`, `rejected`, `app`), and redirects when the page doesn't match. Inside the gate, `useViewer()` returns the current user. The **server is still the authority**: every Convex function re-checks status and permissions.
 
 ### Static export constraints
@@ -101,7 +101,8 @@ Paths are relative to `backend/`. Stage 1 implements everything up to `channels.
 | --- | --- |
 | `convex/schema.ts` | Tables and indexes ([03-data-model.md](03-data-model.md)) |
 | `convex/auth.ts`, `convex/auth.config.ts` | Convex Auth setup, Google provider, `@ucsb.edu` check |
-| `convex/lib/permissions.ts` | `getViewer`, `requireApproved`, `requireAdmin`, `requireSystemAdmin`, `canReadChannel`, `oversees`, etc. |
+| `convex/lib/permissions.ts` | `getViewer`, `requireApproved`, `requireAdmin`, `requireSystemAdmin`, etc. |
+| `convex/lib/channels.ts` | `channelAccess`, `requireChannelAccess`, `oversees`, channel audiences |
 | `convex/lib/audit.ts` | `logAudit(ctx, ...)` helper |
 | `convex/users.ts` | Viewer, profile, onboarding submission (incl. first-admin and pre-approval claim), approval, deactivation, system admin grant |
 | `convex/departments.ts` | Department create, rename, reorder |
@@ -115,6 +116,7 @@ Paths are relative to `backend/`. Stage 1 implements everything up to `channels.
 | `convex/folders.ts` | Folder tree CRUD |
 | `convex/assignments.ts` | Create, update, list, submit, review |
 | `convex/notifications.ts` | Create (internal), list, mark read |
+| `convex/push.ts`, `convex/pushNode.ts`, `lib/push.ts`, `lib/pushText.ts` | Web Push: device subscriptions, VAPID config, scheduling, and the Node action that sends localized pushes (see [notifications-and-email.md](features/notifications-and-email.md#push-notifications)). Frontend side: `public/sw.js`, `app/manifest.ts`, `lib/push.ts` |
 | `convex/email.ts` | Enqueue email job (internal mutation), send (internal action), retry |
 | `convex/audit.ts` | Audit log queries (presidium only) |
 | `convex/crons.ts` | Due-soon reminders, email retry, daily digest |

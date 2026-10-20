@@ -3,6 +3,8 @@ import { mutation, query, type QueryCtx } from "./_generated/server";
 import { logAudit } from "./lib/audit";
 import { CURRENT_CONSENT_VERSION, LIMITS } from "./lib/constants";
 import { appError } from "./lib/errors";
+import { activeLeadIds, presidiumUserIds } from "./lib/channels";
+import { reviewableProposals, trackLeadership } from "./lib/groups";
 import { assignMembership } from "./lib/memberships";
 import {
   getViewer,
@@ -14,7 +16,7 @@ import {
   type ViewerContext,
 } from "./lib/permissions";
 import { activePreApprovalsForEmail, claimPreApprovals } from "./lib/preApprovals";
-import { deactivateUser } from "./lib/users";
+import { deactivateUser, getUserSummaries } from "./lib/users";
 import { locale, membershipRole } from "./schema";
 
 function cleanName(value: string): string {
@@ -119,11 +121,46 @@ export const viewer = query({
           }
         : null,
       reviewCount: await reviewCount(ctx, viewer),
+      pendingGroupCount:
+        user.status === "approved" ? (await reviewableProposals(ctx, viewer)).length : 0,
+      consentVersion: user.oversightConsentVersion ?? 0,
       needsOnboarding:
         !user.nameZh ||
         !user.nameEn ||
         (user.oversightConsentVersion ?? 0) < CURRENT_CONSENT_VERSION,
     };
+  },
+});
+
+/** Who can read the viewer's chats through oversight (settings, "who can see my content"). */
+export const whoCanSeeMe = query({
+  args: {},
+  handler: async (ctx) => {
+    const viewer = await requireApproved(ctx);
+    const admins = await ctx.db
+      .query("users")
+      .withIndex("by_isSystemAdmin", (q) => q.eq("isSystemAdmin", true))
+      .collect();
+    const adminIds = admins.filter((u) => u.status === "approved").map((u) => u._id);
+    const presidiumIds = (await presidiumUserIds(ctx)).filter((id) => !adminIds.includes(id));
+    const people = await getUserSummaries(ctx, [...adminIds, ...presidiumIds]);
+    const pick = (ids: typeof adminIds) =>
+      ids.filter((id) => id !== viewer.user._id).flatMap((id) => people.get(id) ?? []);
+
+    const departments = [];
+    for (const membership of viewer.memberships) {
+      if (membership.role !== "member") continue;
+      const department = await ctx.db.get("departments", membership.departmentId);
+      if (!department || department.kind !== "regular" || department.archivedAt) continue;
+      const leads = await getUserSummaries(ctx, await activeLeadIds(ctx, department._id));
+      departments.push({
+        departmentId: department._id,
+        nameZh: department.nameZh,
+        nameEn: department.nameEn,
+        leads: [...leads.values()],
+      });
+    }
+    return { systemAdmins: pick(adminIds), presidium: pick(presidiumIds), departments };
   },
 });
 
@@ -263,21 +300,28 @@ export const approve = mutation({
       if (!allowed) throw appError("FORBIDDEN");
     }
 
-    for (const m of args.memberships) {
-      const department = await ctx.db.get("departments", m.departmentId);
-      if (!department || department.archivedAt) throw appError("INVALID", "departmentId");
-      await assignMembership(ctx, {
-        userId: target._id,
-        department,
-        role: m.role,
-        addedBy: viewer.user._id,
-      });
-    }
-    await ctx.db.patch("users", target._id, {
-      status: "approved",
-      reviewedBy: viewer.user._id,
-      reviewedAt: Date.now(),
-    });
+    await trackLeadership(
+      ctx,
+      args.memberships.map((m) => m.departmentId),
+      viewer.user._id,
+      async () => {
+        for (const m of args.memberships) {
+          const department = await ctx.db.get("departments", m.departmentId);
+          if (!department || department.archivedAt) throw appError("INVALID", "departmentId");
+          await assignMembership(ctx, {
+            userId: target._id,
+            department,
+            role: m.role,
+            addedBy: viewer.user._id,
+          });
+        }
+        await ctx.db.patch("users", target._id, {
+          status: "approved",
+          reviewedBy: viewer.user._id,
+          reviewedAt: Date.now(),
+        });
+      },
+    );
     await logAudit(ctx, {
       actorId: viewer.user._id,
       action: "user.approve",
@@ -366,7 +410,17 @@ export const reactivate = mutation({
     const target = await ctx.db.get("users", args.userId);
     if (!target) throw appError("NOT_FOUND");
     if (target.status !== "deactivated") throw appError("INVALID", "status");
-    await ctx.db.patch("users", target._id, { status: "approved" });
+    const ledIds = (
+      await ctx.db
+        .query("departmentMemberships")
+        .withIndex("by_user", (q) => q.eq("userId", target._id))
+        .collect()
+    )
+      .filter((m) => m.role === "lead")
+      .map((m) => m.departmentId);
+    await trackLeadership(ctx, ledIds, viewer.user._id, () =>
+      ctx.db.patch("users", target._id, { status: "approved" }),
+    );
     await logAudit(ctx, {
       actorId: viewer.user._id,
       action: "user.reactivate",

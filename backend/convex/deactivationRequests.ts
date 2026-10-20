@@ -4,6 +4,7 @@ import { logAudit } from "./lib/audit";
 import { LIMITS } from "./lib/constants";
 import { appError } from "./lib/errors";
 import { findMembership, getPresidium } from "./lib/memberships";
+import { notify } from "./lib/notify";
 import { requireAdmin, requireApproved } from "./lib/permissions";
 import { deactivateUser } from "./lib/users";
 
@@ -83,6 +84,11 @@ export const review = mutation({
       reviewedBy: viewer.user._id,
       reviewedAt: Date.now(),
       reviewNote: note || undefined,
+    });
+    await notify(ctx, request.userId, {
+      type: "deactivation_reviewed",
+      params: { approved: false, note: note ?? "" },
+      link: "/settings/",
     });
     await logAudit(ctx, {
       actorId: viewer.user._id,

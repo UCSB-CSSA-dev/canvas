@@ -5,9 +5,43 @@ import { displayName, localized } from "@/lib/names";
 
 export type ChannelLists = FunctionReturnType<typeof api.channels.listMine>;
 export type Channel = ChannelLists["org"][number];
+export type ChannelDetail = NonNullable<FunctionReturnType<typeof api.channels.get>>;
+export type Message = FunctionReturnType<typeof api.messages.list>["page"][number];
+export type Person = Message["people"][number];
 
-export function channelName(channel: Channel, locale: Locale, generalLabel: string): string {
-  if (channel.type === "org") return generalLabel;
-  if (channel.type === "department") return localized(channel.nameZh, channel.nameEn, locale);
-  return displayName(channel.otherUser, locale);
+type Labels = { general: string; orgAnnouncements: string; announcementOf: (department: string) => string };
+
+/**
+ * Display name for any channel. DMs seen through oversight show both people ("A ↔ B"),
+ * because neither of them is the viewer.
+ */
+export function channelName(
+  channel: Pick<Channel, "type" | "nameZh" | "nameEn" | "name" | "otherUser" | "dmUsers">,
+  locale: Locale,
+  labels: Labels,
+  viewerId?: string,
+): string {
+  switch (channel.type) {
+    case "org":
+      return labels.general;
+    case "announcement":
+      return channel.nameZh || channel.nameEn
+        ? labels.announcementOf(localized(channel.nameZh, channel.nameEn, locale))
+        : labels.orgAnnouncements;
+    case "department":
+      return localized(channel.nameZh, channel.nameEn, locale);
+    case "group":
+      return channel.name ?? "";
+    case "dm": {
+      const users = channel.dmUsers ?? [];
+      if (viewerId && users.length === 2 && !users.some((u) => u._id === viewerId)) {
+        return users.map((u) => displayName(u, locale)).join(" ↔ ");
+      }
+      return displayName(channel.otherUser, locale);
+    }
+  }
+}
+
+export function personById(people: Person[], id: string | null | undefined) {
+  return id ? people.find((p) => p._id === id) : undefined;
 }

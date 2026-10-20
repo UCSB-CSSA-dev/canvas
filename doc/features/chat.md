@@ -2,131 +2,147 @@
 
 ## Summary
 
-Real-time messaging similar to GroupMe: org-wide and department channels, announcement channels, user-created group chats, and direct messages. Built on Convex subscriptions, so no websockets code is needed.
+Real-time messaging similar to GroupMe or WeChat: org-wide and department channels, announcement channels, group chats that belong to departments, and direct messages. Built on Convex subscriptions, so there is no websocket code. Chats are monitored (see [Oversight](#oversight)) and content expires (see [Retention](#retention)).
 
-## Stage 1 scope
-
-Stage 1 builds only basic text chat. Everything else in this doc is Stage 2 (see [09-roadmap.md](../09-roadmap.md)).
-
-| In Stage 1 | Stage 2 |
-| --- | --- |
-| `org` channel (全体), `department` channels, `dm` | `announcement` and `group` channels |
-| Send plain-text messages (with auto-linked URLs), real-time | Markdown formatting, attachments, mentions, replies, reactions |
-| Paginated history, load older on scroll | Edit and delete, moderation |
-| Unread badges, mark as read | Mute, search, notifications |
-| Start a DM from the roster or a "new DM" picker | Oversight section and banner |
-
-Department channel access follows the hierarchy from day one: it is derived from `departmentMemberships` on every read, so being added to a department on the roster (or through a pre-approval) gives access to its channel immediately, and removal takes it away. Admins can read and post in every department channel in Stage 1, because they can open every page. See [03-data-model.md](../03-data-model.md#channels-and-channelmembers).
+The decisions behind this design are in [09-roadmap.md, Stage 2](../09-roadmap.md#stage-2-full-chat-and-oversight-完整聊天与监督).
 
 ## Channel types
 
-| Type | Created by | Members | Who can post | Name |
+| Type | Created by | Who reads | Who posts | Name |
 | --- | --- | --- | --- | --- |
 | `org` | Seed | All approved users (implicit) | All approved users | "全体 / General" |
-| `department` | Auto when a department is created | Department members (synced) | Department members | Department name |
-| `announcement` (org-wide) | Seed | All approved users (implicit) | Presidium | "全体公告 / Announcements" |
-| `announcement` (department) | Auto with department | Department members (synced) | That department's leads and presidium | "{Dept} 公告" |
-| `group` | Any approved user | Chosen members (2 or more besides creator) | Members | Custom name, required |
-| `dm` | Any approved user | Exactly 2 | Both | Other person's name |
+| `announcement` (org-wide) | Seed | All approved users (implicit) | Admins | "CSSA 公告 / CSSA announcements" |
+| `announcement` (department) | With the department | That department's members (derived) | That department's 部长, admins | "{部门}公告" |
+| `department` | With the department | That department's members (derived) | Readers | Department name |
+| `group` | Proposal approved by a 部长, or created directly by a 部长 / admin | Explicit members, plus the 部长 of every involved department (derived), plus 主席团 during a takeover | Readers | Custom name |
+| `dm` | Any approved user | Exactly 2 | Both, unless one is deactivated | Other person's name |
 
-"Implicit" and "synced" membership: for `org`, `department`, and `announcement` channels, access is computed from the user's status and department memberships, not stored. A `channelMembers` row is created lazily the first time a user opens the channel (it holds `lastReadAt`, and `muted` from Stage 2). `group` and `dm` channels store their members explicitly in `channelMembers`.
+"Derived" access is computed on every read from `departmentMemberships`, so roster changes apply immediately. A `channelMembers` row is created lazily the first time someone opens an implicit channel; it holds `lastReadAt` and `muted`. Group and DM members are stored explicitly (`channelMembers.joinedAt` is set for explicit group members).
+
+Every access decision goes through `channelAccess` in `backend/convex/lib/channels.ts`, which returns `{ via: "member" | "oversight", readOnly, canPost, canInteract, canManage, canModerate, canSetRetention, canApproveApps, canProposeApps, canMentionAll }`.
 
 ## Layout
 
 ```text
-+------------------+-------------------------------------------+
-| Sidebar          | # 活动部                       [i] [search]|
-| ---------------- |-------------------------------------------|
-| 公告 Announcements|  Alice  10:02                             |
-|   全体公告    (2) |  明天活动的物资清单已上传到文件夹          |
-| 部门 Departments |                                           |
-|   活动部      (5) |  Bob  10:05                               |
-|   宣传部          |  @Alice 收到                               |
-| 群聊 Groups      |                                           |
-|   迎新晚会筹备    |                                           |
-| 私信 DMs         |                                           |
-|   Carol      (1) |-------------------------------------------|
-| 监督 Oversight ▸ | [ + ] 输入消息...                [Send]   |
-+------------------+-------------------------------------------+
++-------------------+---------------------------------------------+
+| 公告              | 迎新海报                      👁  🔍  ⋮      |
+|   CSSA 公告   (2) |---------------------------------------------|
+| 全体              | [投票 · 午餐选什么 · 12人] [接龙 · 报名 · 8人] [+]|
+|   全体            |---------------------------------------------|
+| 部门              |  Alice  10:02                               |
+|   活动部      (5) |  明天活动的物资清单已上传                    |
+| 群聊        📋 +  |  Bob  10:05   (已编辑)                       |
+|   迎新海报        |  @Alice 收到                       👍 2      |
+| 私信          +   |                                             |
+|   Carol      (1)  |---------------------------------------------|
+| 监督              | 📎  发送消息到 迎新海报               [发送] |
+|   查看成员聊天 ▸  |                                             |
++-------------------+---------------------------------------------+
 ```
 
-- Unread counts appear as gold badges. Muted channels show a muted icon and no badge, only a dot.
-- The "监督 Oversight" section shows only for leads and presidium, collapsed by default. See [02-roles-and-permissions.md](../02-roles-and-permissions.md#oversight-监督查看).
-- On mobile widths the channel list and the message view are separate screens.
+- Unread counts are gold badges; muted chats show a grey dot instead. Ended groups and archived channels are dimmed with a tag.
+- The 群聊 header has the proposals button (with a dot when something waits for the viewer) and "+" (propose for 部员, create for 部长 and admins).
+- The 监督 section shows only for admins and 部长.
+- Below the `lg` breakpoint (1024px), including tablets where the app sidebar is still shown, the channel list and the conversation are separate screens; the conversation header has a back arrow to the list. From `lg` up they sit side by side and the org channel opens by default.
+- URL parameters on `/chat/`: `c` (channel), `m` (jump to a message), `app` (open a chat app), `proposals=1` (open the group proposals dialog), `oversee=<userId>` (oversight view of one person).
 
 ## Messages
 
 ### Content
 
-- Plain text with lightweight markdown: bold, italic, inline code, code blocks, links (auto-linked). No raw HTML. Render safely (no `dangerouslySetInnerHTML` with user input).
-- Maximum 4,000 characters.
-- Attachments: up to 10 per message, each up to 25 MB (shared limit with Files; see [files.md](files.md)). Images show inline thumbnails; other files show a file card.
-- Mentions: typing `@` opens a member picker for the channel. Stored as `mentionUserIds`. `@all` is allowed only for presidium and leads (in their department channels) and notifies everyone in the channel.
-- Reply: quote a previous message (`replyToId`). No threaded sub-conversations in v1.
-- Reactions: emoji reactions with a toggle; show counts and who reacted on hover.
+- Markdown limited to bold, italic, inline code, code blocks, lists, quotes, and auto-linked URLs, rendered by `react-markdown` with an element allow-list and `skipHtml`. No images in markdown.
+- Up to 4,000 characters.
+- Mentions are stored in the body as `<@userId>` and `<@all>`, so renamed people display correctly. The composer shows "@Name" and encodes on send. `@all` is for admins anywhere they post and 部长 in their own department channels.
+- Replies quote another message in the same channel; the quote shows a placeholder if the original was recalled, removed, or purged. Clicking it jumps to the original.
+- Reactions: a fixed set (👍 ❤️ 😂 🎉 👀 🙏 ✅ 🔥), including in announcement channels; the tooltip shows who reacted.
 
 ### Actions
 
 | Action | Who | Behavior |
 | --- | --- | --- |
-| Send | Members who can post | Insert, update `channels.lastMessageAt`, schedule mention notifications |
-| Edit | Author, within 24 hours | Set `editedAt`, show "(已编辑 / edited)" |
-| Delete | Author anytime; moderators (see matrix) | Soft delete, show "消息已删除 / Message deleted" |
-| React | Anyone who can post | Toggle a `messageReactions` row |
-| Copy text / copy link | Anyone who can read | Client only |
+| Send | Readers who can post | Mentions and replies notify; announcement posts notify every reader |
+| Edit | Author, any time | Previous version saved to `messageEdits`; shows "(已编辑)"; anyone who can read the chat can open the history |
+| Recall (撤回) | Author, within 5 minutes of sending (server time) | Content, reactions, edit history, attachments, and its notifications are erased; shows "{name} 撤回了一条消息" |
+| Remove | 主席团 and system admins | Same erasure as recall; shows "该消息已被主席团移除"; audit logged as `message.moderate_remove` |
+| React | Participants (not through oversight) | Toggles a `messageReactions` row |
+| Forward, select, copy | See [Multi-select](#multi-select) | |
 
-### Read state
+There is no delete. Recall, edit, and react are never available through oversight; removal is the only write allowed there.
 
-- When the message view is focused and scrolled to the bottom, call `channels.markRead(channelId)` (debounced, about once every 2 seconds) to set `lastReadAt = now`.
-- Show a "新消息 / New messages" divider at the first unread message when opening a channel.
-- Read receipts per message are **not** in v1.
+### Read state and loading
 
-### Loading
+- `messages.list` is paginated, 50 per page, newest first; the view loads older pages on demand.
+- Members mark a channel read when they view it. Oversight never changes read state.
+- `messages.around` loads the messages around one message, for search results, reply quotes, and notification links. A purged target shows "这条消息已超过保留期限".
 
-- `messages.list` uses `usePaginatedQuery`, 50 per page, newest first. The view reverses for display and loads older pages when the user scrolls to the top.
-- Keep the scroll position stable when older messages load. Auto-scroll on new messages only when the user is already near the bottom.
+## Retention
 
-## Creating chats
+- Messages are deleted from the server after the chat's `retentionDays`: 15 by default, or 30, 90, 180, 365.
+- Admins can change it on any chat; 部长 on their own department and announcement channels and on groups they manage; DMs are admin-only. Every change posts a system message and writes `channel.retention_change`.
+- An hourly cron (`maintenance.purgeMessages`) deletes expired messages with their reactions and edit history, 500 per run, rescheduling itself. Ended groups are deleted entirely once their retention has passed.
+- The bottom of each chat says how long messages are kept.
 
-- **New group**: name (required), pick members from the directory (approved users only). The creator becomes a group `admin`. Admins can rename, add or remove members, and promote other admins. Any member can leave.
-- **New DM**: pick a person. `channels.getOrCreateDm(otherUserId)` looks up `dmKey` and creates the channel if missing.
-- Department channels cannot be left while you are in the department; you can mute them.
+## Attachments
+
+- Up to 10 files per message, 15 MB each. Larger files are rejected in the browser with a suggestion to upload to Google Drive and send the link.
+- Upload flow: `attachments.generateUploadUrl`, then `attachments.register` (server checks the size; unsent uploads expire after 24 hours), then `messages.send` attaches rows the sender owns.
+- Images get a ~320 px thumbnail made in the browser. Only the thumbnail loads inline; the full file opens on click. SVG and HTML are never rendered inline.
+- Files are deleted 15 days after sending regardless of chat retention (`attachments.expire`, hourly). The message keeps a "文件已过期" card.
+- Convex file URLs are bearer links until the file is deleted; the notice says so.
+
+## Group chats
+
+- 部员 propose a group with a name, purpose, involved departments, and suggested members (`groups.propose`). One approval from a 部长 of any involved department, or 主席团 / a system admin, creates it; the approver can rename it and pick the final members (`groups.reviewProposal`). Proposals expire after 14 days.
+- 部长 and admins can create a group directly (`groups.create`); a 部长's group must include a department they lead.
+- The 部长 of every involved department are members automatically and can't leave while their department is involved. Explicit members can leave.
+- **Takeover:** while any involved department is archived or has no 部长, all of 主席团 can read and manage the group. Start and end post system messages and send one `group_takeover` notification per event (`trackLeadership` in `lib/groups.ts`).
+- Group info sheet: departments (add, remove), members (add, remove), rename, leave, end. Ending makes the group read-only.
+
+## Chat apps
+
+接龙 (sign-up list), 投票 (vote), and 集会 (weekly meeting finder) run inside org, department, announcement, and group chats; at most 5 at a time per chat. Running apps show as chips under the header, up to 3 plus "更多"; a chip opens a side panel. Approvers start apps directly; other participants propose and an approver reviews. Full rules are in [09-roadmap.md, step 2.9](../09-roadmap.md#29-chat-apps-接龙投票集会).
+
+## Multi-select
+
+- "多选" in the chat menu or a message's menu turns on checkboxes (up to 50 messages) and replaces the composer with an action bar.
+- **合并转发:** one `forward` message with a snapshot of the selected messages, sent to up to 5 chats. Forwards nest up to 3 levels and point to the original attachments.
+- **在本设备删除:** hides the messages in this browser only (`localStorage` key `cssa-hub:hidden:<userId>`). "恢复在本设备删除的消息" in the chat menu brings them back.
+- **复制:** copies name, time, and text of each message.
 
 ## Search
 
-- v1: search within the current channel using the `search_body` search index filtered by `channelId`.
-- Later: global search across all channels the viewer can read.
+`messages.search` searches one channel. `messages.searchText` stores the lowercased body with CJK runs split into overlapping two-character pairs, so a Chinese word inside a sentence is found. Results are re-checked with a substring match; up to 50, newest first.
+
+## Oversight
+
+- Every chat header shows an eye icon; hovering (or tapping) lists who can view it besides its participants, from `channels.watchers`. `org` and announcement channels say they're visible to all members.
+- Admins and 部长 pick a person under 监督 (or "查看聊天（监督）" on the roster) to see that person's DMs, groups, and department channels they can only read through oversight (`channels.oversightChannels`).
+- Opening such a chat shows a gold read-only banner and calls `channels.recordOversightOpen`, which writes `oversight.channel.open` at most once per 10 minutes per viewer and chat.
+- If access ends while the chat is open, `channels.get` returns null and the view says the viewer no longer has access.
+- Settings has "谁能查看我的内容" (`users.whoCanSeeMe`).
 
 ## Notifications from chat
 
-- Mention or reply to your message: in-app `mention` notification, and email via the daily digest if enabled (no instant email per message). See [notifications-and-email.md](notifications-and-email.md).
-- New post in an announcement channel: in-app `announcement` notification for all members; email if the user enabled announcement emails.
-- No notifications for ordinary messages. Unread badges cover that.
+In-app only in Stage 2 (`/notifications`, with a count on the nav item):
+- `mention` (including `@all`) and `reply`;
+- `announcement` for every reader of an announcement channel except the author, sent in batches of 200;
+- group and chat-app events (`added_to_group`, `group_*`, `app_*`).
+
+Ordinary messages don't notify; unread badges cover them. Notification text is built from `type` and `params` in the viewer's language.
 
 ## Convex functions
 
-| Function | Type | Notes |
-| --- | --- | --- |
-| `channels.listMine` | query | Channels with unread counts, grouped by type |
-| `channels.listOversight` | query | Leads and presidium only |
-| `channels.get` | query | Includes `via: "member" or "oversight"`; logs audit when via oversight (use a mutation `channels.recordOversightOpen` called on open, since queries cannot write) |
-| `channels.createGroup` | mutation | |
-| `channels.getOrCreateDm` | mutation | |
-| `channels.updateGroup`, `addMembers`, `removeMember`, `leave` | mutation | |
-| `channels.markRead`, `setMuted` | mutation | |
-| `messages.list` | query (paginated) | Permission check per call |
-| `messages.send`, `edit`, `remove` | mutation | |
-| `messages.toggleReaction` | mutation | |
-| `messages.search` | query | Within a channel |
-| `files.generateUploadUrl` | mutation | Shared with Files |
+| Module | Functions |
+| --- | --- |
+| `channels` | `listMine`, `postable`, `get`, `participants`, `watchers`, `getOrCreateDm`, `markRead`, `setMuted`, `setRetention`, `recordOversightOpen`, `oversightPeople`, `oversightChannels` |
+| `messages` | `list`, `around`, `history`, `search`, `send`, `edit`, `recall`, `moderateRemove`, `toggleReaction`, `forward` |
+| `attachments` | `generateUploadUrl`, `register`, `discard`; internal `expire` |
+| `groups` | `propose`, `cancelProposal`, `reviewProposal`, `listProposals`, `create`, `info`, `addMembers`, `removeMember`, `leave`, `rename`, `addDepartment`, `removeDepartment`, `end`; internal `expireProposals` |
+| `apps` | `list`, `get`, `myLastAvailability`, `create`, `review`, `cancelProposal`, `respond`, `withdraw`, `update`, `close`, `reopen`; internal `autoClose`, `dueSoon`, `purge` |
+| `notifications` | `listMine`, `unreadCount`, `markRead`, `markAllRead`; internal `fanout`, `cleanup` |
 
-Important: Convex queries cannot write, so oversight audit logging happens in a mutation the client calls when it opens an oversight channel. `messages.list` must still verify read access on every call.
+Queries can't write, so oversight audit logging happens in `recordOversightOpen`, which the client calls on open. Every query still checks access on every call.
 
 ## Acceptance criteria
 
-- [ ] Messages appear for all viewers of a channel without a page refresh.
-- [ ] A member cannot read a channel they are not in, unless they oversee a participant.
-- [ ] An oversight viewer sees the read-only banner, cannot post, and one audit row is written per open.
-- [ ] Posting in an announcement channel is limited to the roles in the table above.
-- [ ] Unread badges update in real time and clear when the channel is read.
-- [ ] DM between the same two people always resolves to the same channel.
+See the Stage 2 exit criteria in [09-roadmap.md](../09-roadmap.md#exit-criteria-1).

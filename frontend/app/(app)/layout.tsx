@@ -4,7 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   return (
-    <AccountGate allow={["app"]}>
+    <AccountGate allow={["app"]} brandedLoading>
       <AppShell>{children}</AppShell>
     </AccountGate>
   );

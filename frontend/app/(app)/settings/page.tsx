@@ -1,20 +1,22 @@
 "use client";
 
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useTranslations } from "next-intl";
 import { useViewer } from "@/components/auth/account-state";
 import { OversightNotice } from "@/components/auth/oversight-notice";
 import { LanguageToggle } from "@/components/layout/language-toggle";
 import { PageHeader } from "@/components/layout/app-shell";
+import { PushNotificationsCard } from "@/components/settings/push-notifications-card";
 import { DeactivateCard } from "@/components/settings/deactivate-card";
 import { ProfileCard } from "@/components/settings/profile-card";
+import { WhoCanSeeCard } from "@/components/settings/who-can-see-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSignOut } from "@/lib/push";
 
 export default function SettingsPage() {
   const t = useTranslations();
   const viewer = useViewer();
-  const { signOut } = useAuthActions();
+  const signOut = useSignOut();
 
   return (
     <>
@@ -32,6 +34,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          <PushNotificationsCard />
+
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.account")}</CardTitle>
@@ -46,6 +50,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          <WhoCanSeeCard />
           <OversightNotice />
           <DeactivateCard />
         </div>

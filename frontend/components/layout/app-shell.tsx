@@ -1,12 +1,16 @@
 "use client";
 
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
 import {
+  BellIcon,
   ClipboardListIcon,
   FolderIcon,
+  LayoutDashboardIcon,
   LogOutIcon,
   MessageSquareIcon,
+  ScrollTextIcon,
   SettingsIcon,
+  ShieldIcon,
   UsersIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -15,28 +19,61 @@ import { usePathname } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, type ReactNode } from "react";
 import { useViewer } from "@/components/auth/account-state";
+import { PushSync } from "@/components/notifications/push-sync";
 import { PersonAvatar } from "@/components/people/person-avatar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { api } from "@/lib/api";
 import { hasStoredLocale, setStoredLocale, type Locale } from "@/lib/locale-store";
 import { displayName } from "@/lib/names";
+import { useSignOut } from "@/lib/push";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "./brand";
 import { LanguageToggle } from "./language-toggle";
 
 type NavItem = {
-  key: "chat" | "roster" | "files" | "assignments" | "settings";
+  key:
+    | "chat"
+    | "notifications"
+    | "roster"
+    | "files"
+    | "assignments"
+    | "admin"
+    | "adminOverview"
+    | "auditLog"
+    | "settings";
   href: string;
   icon: LucideIcon;
   disabled?: boolean;
+  /** Only highlight on this exact path, not its sub-pages. */
+  exact?: boolean;
 };
 
-const NAV: NavItem[] = [
+const MAIN_NAV: NavItem[] = [
   { key: "chat", href: "/chat/", icon: MessageSquareIcon },
+  { key: "notifications", href: "/notifications/", icon: BellIcon },
   { key: "roster", href: "/roster/", icon: UsersIcon },
   { key: "files", href: "/files/", icon: FolderIcon, disabled: true },
   { key: "assignments", href: "/assignments/", icon: ClipboardListIcon, disabled: true },
-  { key: "settings", href: "/settings/", icon: SettingsIcon },
 ];
+
+const ADMIN_OVERVIEW: NavItem = { key: "adminOverview", href: "/admin/", icon: LayoutDashboardIcon, exact: true };
+const AUDIT_LOG: NavItem = { key: "auditLog", href: "/admin/audit/", icon: ScrollTextIcon };
+const MOBILE_ADMIN: NavItem = { key: "admin", href: "/admin/", icon: ShieldIcon };
+const SETTINGS: NavItem = { key: "settings", href: "/settings/", icon: SettingsIcon };
+
+function useNav() {
+  const viewer = useViewer();
+  const unread = useQuery(api.notifications.unreadCount) ?? 0;
+  const isManager = viewer.isAdmin || viewer.ledDepartmentIds.length > 0;
+  const counts: Partial<Record<NavItem["key"], number>> = {
+    notifications: unread,
+    roster: viewer.reviewCount,
+  };
+  const admin = isManager ? (viewer.isAdmin ? [ADMIN_OVERVIEW, AUDIT_LOG] : [ADMIN_OVERVIEW]) : [];
+  const mobile = [...MAIN_NAV.filter((item) => !item.disabled), ...(isManager ? [MOBILE_ADMIN] : []), SETTINGS];
+  return { main: MAIN_NAV, admin, mobile, counts };
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const viewer = useViewer();
@@ -50,13 +87,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</main>
       <MobileNav />
+      <PushSync />
     </div>
   );
 }
 
 function useIsActive() {
   const pathname = usePathname();
-  return (href: string) => pathname === href || pathname.startsWith(href);
+  return (item: NavItem) => pathname === item.href || (!item.exact && pathname.startsWith(item.href));
 }
 
 function Sidebar() {
@@ -64,23 +102,33 @@ function Sidebar() {
   const locale = useLocale() as Locale;
   const viewer = useViewer();
   const isActive = useIsActive();
-  const { signOut } = useAuthActions();
+  const signOut = useSignOut();
+  const { main, admin, counts } = useNav();
+  const settingsActive = isActive(SETTINGS);
 
   return (
     <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-sidebar md:flex">
-      <div className="px-4 py-4 text-base font-semibold">
-        <span className="text-primary">CSSA</span> Hub
-      </div>
-      <nav className="flex flex-1 flex-col gap-0.5 px-2">
-        {NAV.map((item) => (
+      <Link href="/chat/" className="flex h-14 shrink-0 items-center px-4">
+        <BrandMark className="h-10" />
+      </Link>
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3">
+        {main.map((item) => (
           <NavLink
             key={item.key}
             item={item}
-            active={isActive(item.href)}
+            active={isActive(item)}
             label={t(`nav.${item.key}`)}
-            count={item.key === "roster" ? viewer.reviewCount : 0}
+            count={counts[item.key] ?? 0}
           />
         ))}
+        {admin.length > 0 ? (
+          <div className="mt-auto flex flex-col gap-0.5 pt-4">
+            <div className="px-2.5 pb-1 text-xs text-subtle-foreground">{t("nav.admin")}</div>
+            {admin.map((item) => (
+              <NavLink key={item.key} item={item} active={isActive(item)} label={t(`nav.${item.key}`)} count={0} />
+            ))}
+          </div>
+        ) : null}
       </nav>
       <div className="flex flex-col gap-3 border-t border-border p-3">
         <div className="flex items-center gap-2">
@@ -89,6 +137,22 @@ function Sidebar() {
             <div className="truncate text-sm">{displayName(viewer, locale)}</div>
             <div className="truncate text-xs text-muted-foreground">{viewer.email}</div>
           </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                asChild
+                size="icon-sm"
+                variant="ghost"
+                className={cn(settingsActive && "bg-accent text-primary")}
+                aria-label={t("nav.settings")}
+              >
+                <Link href={SETTINGS.href} aria-current={settingsActive ? "page" : undefined}>
+                  <SettingsIcon />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("nav.settings")}</TooltipContent>
+          </Tooltip>
         </div>
         <div className="flex items-center justify-between">
           <LanguageToggle />
@@ -157,13 +221,14 @@ function CountBadge({ count, className }: { count: number; className?: string })
 
 function MobileNav() {
   const t = useTranslations("nav");
-  const viewer = useViewer();
   const isActive = useIsActive();
+  const { mobile, counts } = useNav();
   return (
     <nav className="flex shrink-0 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden">
-      {NAV.filter((item) => !item.disabled).map((item) => {
+      {mobile.map((item) => {
         const Icon = item.icon;
-        const active = isActive(item.href);
+        const active = isActive(item);
+        const count = counts[item.key] ?? 0;
         return (
           <Link
             key={item.key}
@@ -175,9 +240,7 @@ function MobileNav() {
             )}
           >
             <Icon className="size-5" />
-            {item.key === "roster" && viewer.reviewCount > 0 ? (
-              <CountBadge count={viewer.reviewCount} className="absolute top-1 left-1/2 ml-1.5" />
-            ) : null}
+            {count > 0 ? <CountBadge count={count} className="absolute top-1 left-1/2 ml-1.5" /> : null}
             {t(item.key)}
           </Link>
         );

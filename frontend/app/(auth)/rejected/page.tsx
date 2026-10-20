@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuthActions } from "@convex-dev/auth/react";
 import { useMutation } from "convex/react";
 import { BanIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -9,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
+import { useSignOut } from "@/lib/push";
 
 export default function RejectedPage() {
   return (
@@ -21,7 +21,7 @@ export default function RejectedPage() {
 function RejectedCard() {
   const t = useTranslations();
   const viewer = useViewer();
-  const { signOut } = useAuthActions();
+  const signOut = useSignOut();
   const reapply = useMutation(api.users.reapply);
   const showError = useErrorToast();
   const deactivated = viewer.status === "deactivated";

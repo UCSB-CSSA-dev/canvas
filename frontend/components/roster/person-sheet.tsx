@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { MessageSquareIcon, MoreHorizontalIcon, ShieldIcon } from "lucide-react";
+import { EyeIcon, MessageSquareIcon, MoreHorizontalIcon, ShieldIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
@@ -104,6 +104,9 @@ function PersonDetails({ roster, userId, onClose }: { roster: Roster; userId: Id
   const leadsElsewhere = memberships.some((m) => m.department.kind === "regular" && m.role === "lead");
   const formerRole = "formerRole" in person ? person.formerRole : undefined;
 
+  const oversees =
+    !isSelf &&
+    (isAdmin || memberships.some((m) => m.role === "member" && leadsDepartment(roster, m.department._id)));
   const memberOf = new Set(memberships.map((m) => m.department._id));
   const addOptions = isDeactivated ? [] : managedDepartments(roster).filter((d) => !memberOf.has(d._id));
   const addDepartment = addOptions.find((d) => d._id === addDepartmentId);
@@ -232,10 +235,25 @@ function PersonDetails({ roster, userId, onClose }: { roster: Roster; userId: Id
 
       <div className="flex flex-col gap-5 px-4 pb-6">
         {!isSelf && !isDeactivated ? (
-          <Button variant="secondary" onClick={() => void message()}>
-            <MessageSquareIcon />
-            {t("person.message")}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => void message()}>
+              <MessageSquareIcon />
+              {t("person.message")}
+            </Button>
+            {oversees ? (
+              <Button
+                variant="outline"
+                className="flex-1 border-primary/40 text-primary"
+                onClick={() => {
+                  onClose();
+                  router.push(`/chat/?oversee=${userId}`);
+                }}
+              >
+                <EyeIcon />
+                {t("person.oversee")}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
 
         <section className="flex flex-col gap-2">

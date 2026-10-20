@@ -77,9 +77,11 @@ Oversight is **read-only**. An overseer cannot post as, edit, or delete the subj
 
 ### Oversight in the UI
 
-- The channel list has a separate "Oversight 监督" section, collapsed by default, listing channels the viewer can read only through oversight. These are not mixed into the viewer's normal chats.
-- Opening a channel through oversight shows a gold banner: "监督查看模式 / Oversight view (read-only)".
-- Overseers do not receive notifications for channels they only oversee, and their reads do not change participants' read receipts.
+- Every monitored chat shows an eye icon at the top right; hovering lists who can view it besides its participants.
+- The channel list has a "监督 Oversight" section for admins and 部长. They pick a person they oversee and see that person's chats the viewer can read only through oversight. These are not mixed into the viewer's normal chats. The roster person drawer links to the same view.
+- Opening a channel through oversight shows a gold read-only banner.
+- Overseers do not receive notifications for channels they only oversee, and their reads do not change participants' read state.
+- Settings shows each user who can see their content.
 
 ### Audit logging
 
@@ -115,9 +117,14 @@ requireLeadOf(ctx, departmentId): Promise<ViewerContext>  // lead of dept OR adm
 
 canPreApprove(viewer, departmentId, role): boolean  // see "Accounts and organization" matrix
 
+// convex/lib/channels.ts
 oversees(ctx, viewer, subjectUserId): Promise<boolean>
-canReadChannel(ctx, viewer, channel): Promise<{ allowed: boolean; via: "member" | "oversight" | null }>
-canPostInChannel(ctx, viewer, channel): Promise<boolean>
+channelAccess(ctx, viewer, channel): Promise<ChannelAccess | null>
+  // { via: "member" | "oversight", readOnly, canPost, canInteract, canManage, canModerate,
+  //   canSetRetention, canApproveApps, canProposeApps, canMentionAll }; null = no access
+requireChannelAccess(ctx, viewer, channelId): Promise<{ channel, access }>
+
+// later stages
 canReadFolder / canWriteFolder(ctx, viewer, folder): Promise<boolean>
 canReadFile(ctx, viewer, file): Promise<{ allowed: boolean; via: "access" | "oversight" | null }>
 canManageAssignment(ctx, viewer, assignment): Promise<boolean>
@@ -157,17 +164,25 @@ Legend: Y = allowed, O = read via oversight (logged), Own = only their own, Dept
 
 ### Chat
 
+Implemented by `channelAccess` in `backend/convex/lib/channels.ts`. Through oversight everything is read-only except 主席团's moderation removal.
+
 | Action | Presidium | Lead | Member |
 | --- | --- | --- | --- |
 | Read own channels (as participant) | Y | Y | Y |
-| Read any channel | O | O for channels with a member they oversee | N |
-| Create group chat | Y | Y | Y |
+| Read any DM, group, or department channel | O | O for chats with a 部员 they lead | N |
+| Create a group chat | Y (any departments, or none) | Y (must include a department they lead) | N: propose one instead |
+| Approve or reject a group proposal | Y | Dept (an involved department) | N |
+| Manage a group (rename, add or remove departments, end) | Y if a member, or during a takeover | Dept (an involved department) | N |
+| Add or remove group members | Y: anyone | Dept: members of departments they lead | N (can leave) |
 | Start DM with any approved user | Y | Y | Y |
 | Post in department channel | Y | Y (own dept) | Y (own dept) |
-| Post in announcement channel | Y | Dept announcement channel only | N |
-| Edit or delete own message | Y | Y | Y |
-| Delete others' messages (moderation) | Y | Dept channels only | N |
-| Add or remove people in a group chat | Y | Creator or group admin | Creator or group admin |
+| Post in announcement channel | Y | Dept announcement channel only | N (can react) |
+| `@all` | Y | Own department channels | N |
+| Edit own message (history visible to the chat) | Y | Y | Y |
+| Recall own message within 5 minutes | Y | Y | Y |
+| Remove others' messages (moderation, audit logged) | Y | N | N |
+| Change a chat's retention (15 days to 1 year) | Y (DMs: admins only) | Dept channels and groups they manage | N |
+| Start a chat app (接龙, 投票, 集会) or approve a proposed one | Y in org, announcement, and groups they're in | Dept channels and groups they manage | N: propose one instead |
 
 ### Files
 

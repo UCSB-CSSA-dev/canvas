@@ -2,10 +2,11 @@
 
 ## Summary
 
-Two delivery channels:
+Three delivery channels:
 
 1. **In-app notifications**: a bell icon with an unread count, plus the `/notifications` page. Real time through Convex.
-2. **Email**: sent through Gmail by a Google Apps Script web app. Used sparingly for things people must not miss. Transport details are in [06-email-apps-script.md](../06-email-apps-script.md).
+2. **Push notifications** (Web Push): system notifications on devices where the user turned them on in Settings, even when CSSA Hub is closed. See [Push notifications](#push-notifications).
+3. **Email**: sent through Gmail by a Google Apps Script web app. Used sparingly for things people must not miss. Transport details are in [06-email-apps-script.md](../06-email-apps-script.md).
 
 ## Triggers
 
@@ -33,6 +34,27 @@ Two delivery channels:
 - "全部标为已读 / Mark all as read".
 - The display text is **not stored**. Store `type` + `params`, and render through `next-intl` keys like `notifications.assignment_new` with params `{ title, by }`, so each user sees their own language.
 - Keep 90 days. A daily cron deletes older read notifications.
+
+## Push notifications
+
+Standard Web Push (service worker + VAPID), so it works with a static GitHub Pages site and Convex.
+
+**What pushes:** every in-app notification (mentions, replies, announcements, group and app events, review results), plus every new **DM** message unless the recipient muted that DM. DMs have no notification row; the chat list's unread count covers them in-app.
+
+**Turning it on (Settings → 推送通知):**
+- Per device. "开启通知" asks for the browser permission, subscribes with the deployment's VAPID public key (`push.config`), saves the subscription (`push.subscribe`) and sends a test push. "发送测试通知" and "在这台设备上关闭" are available afterwards.
+- iPhone: Web Push only works in a web app added to the Home Screen (iOS 16.4+). In a Safari tab the card explains this; the "iPhone 设置说明" dialog walks through Share → Add to Home Screen → open from the icon → turn on.
+- `app/manifest.ts` (standalone display, phoenix icons) is what makes "Add to Home Screen" open as an app.
+- Signing out unsubscribes the device first, so the next person using it doesn't get the previous user's notifications. A subscribed endpoint follows whoever subscribed on it last.
+- `PushSync` re-saves the subscription on each app load, since browsers can rotate or drop subscriptions.
+
+**Sending:**
+- `lib/notify.ts` and the DM branch of `messages.send` call `queuePush`, which schedules `internal.pushNode.send` only for recipients with at least one device (users without push cost nothing).
+- `pushNode.send` (Node action, `web-push`) builds the text server-side in each recipient's `users.locale` (`lib/pushText.ts` mirrors the `notifications.*` strings, since the service worker can't run next-intl), sends to every device, and deletes subscriptions the push service reports as gone (404/410). Deactivated or not-approved users get nothing.
+- Payloads are encrypted end to end by the Web Push protocol; Apple, Google and Mozilla relay them without being able to read message previews.
+- `public/sw.js` shows the notification and, on tap, focuses an open CSSA Hub window and navigates to the link, or opens one. On Chrome and Firefox it skips the system notification while a CSSA Hub window is focused; Safari always shows it because it may revoke subscriptions that receive silent pushes.
+
+**Configuration:** Convex env `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (generate with `npx web-push generate-vapid-keys` in `backend/`), optional `VAPID_SUBJECT` (`mailto:` address). Without the keys the Settings card says notifications aren't set up and nothing is sent.
 
 ## Email
 
@@ -68,6 +90,8 @@ Defined in [06-email-apps-script.md](../06-email-apps-script.md#templates). Rend
 ## Acceptance criteria
 
 - [ ] The bell count updates in real time.
+- [ ] With push on, a mention or DM shows a system notification on a closed desktop browser, an Android phone, and an iPhone home-screen app; tapping it opens the right chat.
+- [ ] After signing out on a device, that device stops getting pushes.
 - [ ] Notifications render in the viewer's current language.
 - [ ] Turning off an email preference stops those emails but keeps in-app notifications.
 - [ ] Failed emails retry up to 5 times with backoff and never send duplicates.

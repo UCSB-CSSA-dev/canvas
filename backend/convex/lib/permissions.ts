@@ -106,37 +106,3 @@ export function canPreApprove(
     department.kind === "regular" && role === "member" && isLeadOf(viewer, department._id)
   );
 }
-
-export async function canReadChannel(
-  ctx: QueryCtx,
-  viewer: ViewerContext,
-  channel: Doc<"channels">,
-): Promise<boolean> {
-  switch (channel.type) {
-    case "org":
-      return true;
-    case "department":
-      return (
-        channel.departmentId !== undefined &&
-        (viewer.isAdmin || viewer.memberDepartmentIds.includes(channel.departmentId))
-      );
-    case "dm": {
-      const row = await ctx.db
-        .query("channelMembers")
-        .withIndex("by_channel_user", (q) =>
-          q.eq("channelId", channel._id).eq("userId", viewer.user._id),
-        )
-        .unique();
-      return row !== null;
-    }
-  }
-}
-
-/** In Stage 1 everyone who can read a channel can post in it. */
-export async function canPostInChannel(
-  ctx: QueryCtx,
-  viewer: ViewerContext,
-  channel: Doc<"channels">,
-): Promise<boolean> {
-  return canReadChannel(ctx, viewer, channel);
-}

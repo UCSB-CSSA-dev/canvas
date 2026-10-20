@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { api, LIMITS, type Id } from "@/lib/api";
+import { api, CURRENT_CONSENT_VERSION, LIMITS, type Id } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
 import type { Locale } from "@/lib/locale-store";
 import { localized } from "@/lib/names";
@@ -43,6 +43,7 @@ function OnboardingForm() {
   const [busy, setBusy] = useState(false);
 
   const skipsReview = viewer.status === "approved" || viewer.preApprovals.length > 0;
+  const reconsent = viewer.consentVersion > 0 && viewer.consentVersion < CURRENT_CONSENT_VERSION;
   const regular = (departments ?? []).filter((d) => d.kind === "regular");
   const canSubmit =
     consent &&
@@ -75,11 +76,12 @@ function OnboardingForm() {
   return (
     <Card className="w-full max-w-lg">
       <CardHeader>
-        <CardTitle>{t("onboarding.title")}</CardTitle>
-        <CardDescription>{t("onboarding.subtitle")}</CardDescription>
+        <CardTitle>{reconsent ? t("onboarding.updatedTitle") : t("onboarding.title")}</CardTitle>
+        <CardDescription>{reconsent ? t("onboarding.updatedSubtitle") : t("onboarding.subtitle")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="flex flex-col gap-5">
+          {reconsent ? <OversightNotice /> : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="nameZh">{t("onboarding.nameZh")}</Label>
@@ -151,7 +153,7 @@ function OnboardingForm() {
             </>
           ) : null}
 
-          <OversightNotice />
+          {reconsent ? null : <OversightNotice />}
 
           <label className="flex cursor-pointer items-start gap-2 text-sm">
             <Checkbox

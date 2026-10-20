@@ -39,9 +39,6 @@ function SignInCard() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader className="text-center">
-        <div className="mb-2 text-2xl font-semibold">
-          <span className="text-primary">CSSA</span> Hub
-        </div>
         <CardTitle>{t("title")}</CardTitle>
         <CardDescription>{t("subtitle")}</CardDescription>
       </CardHeader>

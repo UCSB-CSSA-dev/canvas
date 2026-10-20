@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "npx serve out",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "check:i18n": "node scripts/check-i18n.mjs",
     "brand": "node scripts/brand-assets.mjs"
   },

@@ -8,13 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useErrorToast } from "@/lib/errors";
 import { usePush } from "@/lib/push";
 
 export function PushNotificationsCard() {
   const t = useTranslations("settings");
   const push = usePush();
-  const showError = useErrorToast();
   const [busy, setBusy] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
 
@@ -29,15 +27,6 @@ export function PushNotificationsCard() {
       toast.error(t("pushEnableFailed"));
     } finally {
       setBusy(false);
-    }
-  };
-
-  const test = async () => {
-    try {
-      await push.test();
-      toast.success(t("pushTestSent"));
-    } catch (error) {
-      showError(error);
     }
   };
 
@@ -70,11 +59,7 @@ export function PushNotificationsCard() {
   } else if (push.state === "on") {
     body = (
       <>
-        <Button variant="secondary" onClick={() => void test()}>
-          <BellIcon />
-          {t("pushTest")}
-        </Button>
-        <Button variant="ghost" onClick={() => void push.disable()}>
+        <Button variant="secondary" onClick={() => void push.disable()}>
           <BellOffIcon />
           {t("pushDisable")}
         </Button>

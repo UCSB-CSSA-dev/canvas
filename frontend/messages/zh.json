@@ -385,8 +385,6 @@
     "pushEnabled": "已开启，稍后会收到一条测试通知",
     "pushEnableFailed": "开启失败，请稍后再试",
     "pushDisable": "在这台设备上关闭",
-    "pushTest": "发送测试通知",
-    "pushTestSent": "已发送，几秒内应收到通知",
     "pushDenied": "浏览器已阻止本网站的通知。请在浏览器的网站设置中允许通知，然后刷新页面。",
     "pushUnsupported": "这个浏览器不支持推送通知。",
     "pushIosInstall": "在 iPhone 上，需要先把 CSSA Hub 添加到主屏幕，并从主屏幕打开，才能开启通知。",

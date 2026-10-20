@@ -43,17 +43,20 @@ await raw(onDark).webp({ quality: 90 }).toFile(file("assets/brand/logo-on-dark.w
 await raw(mark).extract(MARK).webp({ quality: 90 }).toFile(file("assets/brand/logo-mark.webp"));
 
 const phoenix = await sharp(SOURCE).extract(PHOENIX).png().toBuffer();
-const side = Math.max(PHOENIX.width, PHOENIX.height);
-const square = (background) =>
-  sharp({ create: { width: side, height: side, channels: 4, background } })
+/** Share of the side the phoenix fills. iOS and Android round the corners of app icons. */
+const APP_ICON_FILL = 0.84;
+const square = (background, fill = 1) => {
+  const side = Math.round(Math.max(PHOENIX.width, PHOENIX.height) / fill);
+  return sharp({ create: { width: side, height: side, channels: 4, background } })
     .composite([{ input: phoenix, gravity: "center" }])
     .png()
     .toBuffer();
+};
 
 await sharp(await square({ r: 0, g: 0, b: 0, alpha: 0 })).resize(128, 128).png().toFile(file("app/icon.png"));
-await sharp(await square(BACKGROUND)).resize(180, 180).png().toFile(file("app/apple-icon.png"));
+await sharp(await square(BACKGROUND, APP_ICON_FILL)).resize(180, 180).png().toFile(file("app/apple-icon.png"));
 for (const size of [192, 512]) {
-  await sharp(await square(BACKGROUND))
+  await sharp(await square(BACKGROUND, APP_ICON_FILL))
     .resize(size, size)
     .png({ palette: true, quality: 90 })
     .toFile(file(`public/brand/icon-${size}.png`));

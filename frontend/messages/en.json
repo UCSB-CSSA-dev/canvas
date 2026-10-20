@@ -385,8 +385,6 @@
     "pushEnabled": "Turned on. A test notification is on its way",
     "pushEnableFailed": "Couldn't turn on notifications. Please try again later",
     "pushDisable": "Turn off on this device",
-    "pushTest": "Send a test notification",
-    "pushTestSent": "Sent. It should arrive within a few seconds",
     "pushDenied": "Your browser is blocking notifications from this site. Allow them in the browser's site settings, then reload the page.",
     "pushUnsupported": "This browser doesn't support push notifications.",
     "pushIosInstall": "On iPhone, add CSSA Hub to your Home Screen and open it from there before turning on notifications.",

@@ -1,10 +1,11 @@
 // Regenerates the derived brand images from assets/brand/logo.webp (640×193, transparent):
 //   assets/brand/logo-on-dark.webp  full lockup with the dark text recolored for the dark theme
 //   assets/brand/logo-mark.webp     phoenix + "UCSB CSSA" wordmark, without the text block
-//   app/icon.png                    favicon (phoenix only)
-//   app/apple-icon.png              iOS home-screen icon (phoenix on the app background)
+// and from assets/brand/app-icon.webp (1024×1024 phoenix on black, full bleed):
+//   app/icon.png                    favicon
+//   app/apple-icon.png              iOS home-screen icon
 //   public/brand/icon-{192,512}.png web app manifest icons (app/manifest.ts)
-// Run with `npm run brand --workspace frontend` after replacing logo.webp. The crop boxes
+// Run with `npm run brand --workspace frontend` after replacing either source. The crop boxes
 // below are measured on the current logo and need re-measuring if its layout changes.
 // Uses the sharp copy that Next.js installs.
 import { fileURLToPath } from "node:url";
@@ -12,12 +13,11 @@ import sharp from "sharp";
 
 const file = (path) => fileURLToPath(new URL(`../${path}`, import.meta.url));
 const SOURCE = file("assets/brand/logo.webp");
-const BACKGROUND = { r: 10, g: 10, b: 10, alpha: 1 };
+const APP_ICON = file("assets/brand/app-icon.webp");
 
 /** Everything right of this x is the text block (divider line + names). */
 const TEXT_START_X = 358;
 const MARK = { left: 0, top: 0, width: 376, height: 160 };
-const PHOENIX = { left: 170, top: 0, width: 165, height: 110 };
 
 const { data, info } = await sharp(SOURCE).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 const { width, height } = info;
@@ -42,24 +42,21 @@ for (let y = 0; y < height; y++) {
 await raw(onDark).webp({ quality: 90 }).toFile(file("assets/brand/logo-on-dark.webp"));
 await raw(mark).extract(MARK).webp({ quality: 90 }).toFile(file("assets/brand/logo-mark.webp"));
 
-const phoenix = await sharp(SOURCE).extract(PHOENIX).png().toBuffer();
-/** Share of the side the phoenix fills. iOS and Android round the corners of app icons. */
-const APP_ICON_FILL = 0.84;
-const square = (background, fill = 1) => {
-  const side = Math.round(Math.max(PHOENIX.width, PHOENIX.height) / fill);
-  return sharp({ create: { width: side, height: side, channels: 4, background } })
-    .composite([{ input: phoenix, gravity: "center" }])
-    .png()
-    .toBuffer();
-};
+/** Shrinks the art onto black so the wingtips clear the rounded corners iOS and Android apply. */
+const APP_ICON_FILL = 0.9;
+const { width: iconSide } = await sharp(APP_ICON).metadata();
+const art = await sharp(APP_ICON).resize(Math.round(iconSide * APP_ICON_FILL)).png().toBuffer();
+const icon = await sharp({
+  create: { width: iconSide, height: iconSide, channels: 3, background: { r: 0, g: 0, b: 0 } },
+})
+  .composite([{ input: art, gravity: "center" }])
+  .png()
+  .toBuffer();
 
-await sharp(await square({ r: 0, g: 0, b: 0, alpha: 0 })).resize(128, 128).png().toFile(file("app/icon.png"));
-await sharp(await square(BACKGROUND, APP_ICON_FILL)).resize(180, 180).png().toFile(file("app/apple-icon.png"));
+await sharp(icon).resize(128, 128).png().toFile(file("app/icon.png"));
+await sharp(icon).resize(180, 180).png().toFile(file("app/apple-icon.png"));
 for (const size of [192, 512]) {
-  await sharp(await square(BACKGROUND, APP_ICON_FILL))
-    .resize(size, size)
-    .png({ palette: true, quality: 90 })
-    .toFile(file(`public/brand/icon-${size}.png`));
+  await sharp(icon).resize(size, size).png({ palette: true, quality: 90 }).toFile(file(`public/brand/icon-${size}.png`));
 }
 
 console.log("Brand assets written.");

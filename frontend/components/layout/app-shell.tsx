@@ -83,9 +83,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [viewer.locale]);
 
   return (
-    <div className="flex h-dvh flex-col md:flex-row">
+    <div className="flex h-dvh flex-col pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] md:flex-row">
       <Sidebar />
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</main>
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col md:pb-[env(safe-area-inset-bottom)]">{children}</main>
       <MobileNav />
       <PushSync />
     </div>
@@ -130,7 +130,7 @@ function Sidebar() {
           </div>
         ) : null}
       </nav>
-      <div className="flex flex-col gap-3 border-t border-border p-3">
+      <div className="flex flex-col gap-3 border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-2">
           <PersonAvatar person={viewer} />
           <div className="min-w-0 flex-1">
@@ -224,7 +224,7 @@ function MobileNav() {
   const isActive = useIsActive();
   const { mobile, counts } = useNav();
   return (
-    <nav className="flex shrink-0 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav className="flex shrink-0 border-t border-border bg-sidebar pb-[calc(env(safe-area-inset-bottom)*1.15)] md:hidden">
       {mobile.map((item) => {
         const Icon = item.icon;
         const active = isActive(item);

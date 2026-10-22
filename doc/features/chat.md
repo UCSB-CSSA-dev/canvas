@@ -52,7 +52,7 @@ Until 2026-10 announcements had their own `announcement` channels ("CSSA 公告"
 +-------------------+---------------------------------------------+
 ```
 
-- Unread counts are gold badges; muted chats show a grey dot instead. Unseen announcements replace the badge with an amber megaphone badge (see [Announcements](#announcements-公告)). Ended groups and archived channels are dimmed with a tag.
+- Unread counts are gold badges; muted chats show a grey dot instead. Every new message pushes to devices with notifications on, except in muted chats (see [Push notifications](notifications-and-email.md#push-notifications)). Unseen announcements replace the badge with an amber megaphone badge (see [Announcements](#announcements-公告)). Ended groups and archived channels are dimmed with a tag.
 - The 群聊 header has the proposals button (with a dot when something waits for the viewer) and "+" (propose for 部员, create for 部长 and admins).
 - The 监督 section shows only for admins and 部长.
 - Below the `lg` breakpoint (1024px), including tablets where the app sidebar is still shown, the channel list and the conversation are separate screens; the conversation header has a back arrow to the list. From `lg` up they sit side by side and the org channel opens by default.

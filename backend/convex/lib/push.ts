@@ -6,7 +6,7 @@ import { NOTIFICATION_TYPES } from "./constants";
 import type { PushInput } from "./pushText";
 
 export const pushInputValidator = v.object({
-  type: v.union(...NOTIFICATION_TYPES.map((t) => v.literal(t)), v.literal("dm"), v.literal("test")),
+  type: v.union(...NOTIFICATION_TYPES.map((t) => v.literal(t)), v.literal("dm"), v.literal("chat"), v.literal("test")),
   params: v.any(),
   link: v.optional(v.string()),
   tag: v.optional(v.string()),

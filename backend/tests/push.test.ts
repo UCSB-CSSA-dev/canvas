@@ -92,6 +92,31 @@ describe("push delivery", () => {
     expect(pushes[0]).toMatchObject({ userIds: [bob.userId], input: { type: "mention" } });
   });
 
+  test("department and group messages push to everyone in the chat except the sender and those who muted it", async () => {
+    const t = setup();
+    const { admin, alice, bob } = await team(t);
+    await alice.as.mutation(api.push.subscribe, device(1));
+    await bob.as.mutation(api.push.subscribe, device(2));
+    await admin.as.mutation(api.push.subscribe, device(3));
+    const events = await eventsChannel(alice.as);
+
+    const messageId = await alice.as.mutation(api.messages.send, { channelId: events, body: "hi team" });
+    let pushes = await scheduledPushes(t);
+    expect(pushes).toHaveLength(1);
+    expect(new Set(pushes[0].userIds)).toEqual(new Set([bob.userId]));
+    expect(pushes[0].input).toMatchObject({ type: "chat", tag: messageId });
+
+    await bob.as.mutation(api.channels.setMuted, { channelId: events, muted: true });
+    await alice.as.mutation(api.messages.send, { channelId: events, body: "muted" });
+    expect(await scheduledPushes(t)).toHaveLength(1);
+
+    // Edits don't push the message again.
+    await bob.as.mutation(api.channels.setMuted, { channelId: events, muted: false });
+    await alice.as.mutation(api.messages.edit, { messageId, body: `hi team <@${bob.userId}>` });
+    pushes = await scheduledPushes(t);
+    expect(pushes.map((p) => p.input.type)).toEqual(["chat", "mention"]);
+  });
+
   test("push text follows the recipient's language", () => {
     const lookup = { people: { u1: { nameZh: "李华", nameEn: "Hua Li" } }, departments: {} };
     const input = { type: "mention" as const, params: { actorId: "u1", preview: "开会" } };
@@ -100,6 +125,12 @@ describe("push delivery", () => {
     expect(pushText({ type: "dm", params: { actorId: "missing" } }, "zh", lookup)).toEqual({
       title: "某人",
       body: "[文件]",
+    });
+    const chat = { type: "chat" as const, params: { actorId: "u1", preview: "开会" } };
+    expect(pushText(chat, "zh", lookup)).toEqual({ title: "全体", body: "李华：开会" });
+    expect(pushText({ ...chat, params: { ...chat.params, name: "迎新" } }, "en", lookup)).toEqual({
+      title: "迎新",
+      body: "Hua Li: 开会",
     });
   });
 });

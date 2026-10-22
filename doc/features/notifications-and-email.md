@@ -39,7 +39,7 @@ Three delivery channels:
 
 Standard Web Push (service worker + VAPID), so it works with a static GitHub Pages site and Convex.
 
-**What pushes:** every in-app notification (mentions, replies, announcements, group and app events, review results), plus every new **DM** message unless the recipient muted that DM. DMs have no notification row; the chat list's unread count covers them in-app.
+**What pushes:** every in-app notification (mentions, replies, announcements, group and app events, review results), plus every new **chat message** (DMs, 全体, department and group chats) to everyone in that chat except the sender and those who muted it. Someone who already got a mention, reply or announcement push for a message doesn't get a second one. Plain messages have no notification row; the chat list's unread count covers them in-app. A DM push is titled with the sender; other chats are titled with the chat name, with "sender: preview" as the body. Editing a message only pushes newly added mentions.
 
 **Turning it on (Settings → 推送通知):**
 - Per device. "开启通知" asks for the browser permission, subscribes with the deployment's VAPID public key (`push.config`), saves the subscription (`push.subscribe`) and sends a test push. "发送测试通知" and "在这台设备上关闭" are available afterwards.
@@ -47,12 +47,15 @@ Standard Web Push (service worker + VAPID), so it works with a static GitHub Pag
 - `app/manifest.ts` (standalone display, phoenix icons) is what makes "Add to Home Screen" open as an app.
 - Signing out unsubscribes the device first, so the next person using it doesn't get the previous user's notifications. A subscribed endpoint follows whoever subscribed on it last.
 - `PushSync` re-saves the subscription on each app load, since browsers can rotate or drop subscriptions.
+- Reminder on the 通知 page (`PushReminder`): while this device can't get pushes (off, an iPhone Safari tab, or blocked), a gold card at the top says so, explains that updating, reinstalling or re-adding the Home Screen app turns notifications off, and offers "开启通知" (when possible), the iPhone guide and a link to Settings. It disappears once push is on, and never shows when the deployment has no VAPID keys or the browser can't do push at all.
 
 **Sending:**
-- `lib/notify.ts` and the DM branch of `messages.send` call `queuePush`, which schedules `internal.pushNode.send` only for recipients with at least one device (users without push cost nothing).
+- `lib/notify.ts` and `messages.send` (for plain chat messages) call `queuePush`, which schedules `internal.pushNode.send` only for recipients with at least one device (users without push cost nothing).
 - `pushNode.send` (Node action, `web-push`) builds the text server-side in each recipient's `users.locale` (`lib/pushText.ts` mirrors the `notifications.*` strings, since the service worker can't run next-intl), sends to every device, and deletes subscriptions the push service reports as gone (404/410). Deactivated or not-approved users get nothing.
 - Payloads are encrypted end to end by the Web Push protocol; Apple, Google and Mozilla relay them without being able to read message previews.
-- `public/sw.js` shows the notification and, on tap, focuses an open CSSA Hub window and navigates to the link, or opens one. On Chrome and Firefox it skips the system notification while a CSSA Hub window is focused; Safari always shows it because it may revoke subscriptions that receive silent pushes.
+- `public/sw.js` shows the notification and, on tap, focuses an open CSSA Hub window and navigates to the link, or opens one. On Chrome and Firefox it skips the system notification while a CSSA Hub window is focused. Anything on Apple's push service (Safari, every iOS browser, home-screen apps) always shows it, because Apple may revoke subscriptions that receive silent pushes. It detects Apple by WebKit rather than "Safari", since home-screen apps often leave "Safari" out of their user agent.
+- `pushNode.send` logs one line per push (`push <type>: x/y delivered, n expired, m failed`), with no names or content, for debugging delivery.
+- iPhone: removing and re-adding the Home Screen app (for example to pick up a new icon) creates a fresh app with its own storage, so notifications must be turned on again in its Settings. The old app's subscription is dropped the next time a push to it comes back as expired.
 
 **Configuration:** Convex env `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (generate with `npx web-push generate-vapid-keys` in `backend/`), optional `VAPID_SUBJECT` (`mailto:` address). Without the keys the Settings card says notifications aren't set up and nothing is sent.
 

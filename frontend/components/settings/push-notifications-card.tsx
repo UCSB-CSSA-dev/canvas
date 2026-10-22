@@ -10,11 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { usePush } from "@/lib/push";
 
-export function PushNotificationsCard() {
+/** Turns push on for this device and sends a test notification; call straight from a tap. */
+export function useEnablePush() {
   const t = useTranslations("settings");
   const push = usePush();
   const [busy, setBusy] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
 
   const enable = async () => {
     setBusy(true);
@@ -29,6 +29,13 @@ export function PushNotificationsCard() {
       setBusy(false);
     }
   };
+  return { push, busy, enable };
+}
+
+export function PushNotificationsCard() {
+  const t = useTranslations("settings");
+  const { push, busy, enable } = useEnablePush();
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const guideButton = (primary: boolean) => (
     <Button variant={primary ? "default" : "ghost"} onClick={() => setGuideOpen(true)}>
@@ -93,7 +100,7 @@ export function PushNotificationsCard() {
   );
 }
 
-function IosGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function IosGuideDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useTranslations("settings");
   const icon = "mx-0.5 inline size-4 align-text-bottom text-primary";
   return (

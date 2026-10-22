@@ -6,8 +6,9 @@ self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
 const ua = self.navigator.userAgent;
-// Safari (including iPhone home-screen apps) may revoke the subscription if a push shows nothing.
-const isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|Edg|Firefox|FxiOS/.test(ua);
+// Apple's push service (Safari, every iOS browser, home-screen apps) may revoke the subscription if a
+// push shows nothing. Home-screen apps often leave "Safari" out of their user agent, so match WebKit.
+const isApple = /AppleWebKit/.test(ua) && !/Chrome\/|Chromium\/|Edg\/|Android/.test(ua);
 
 function urlFor(link) {
   return new URL((link || "chat/").replace(/^\//, ""), self.registration.scope).href;
@@ -22,7 +23,7 @@ self.addEventListener("push", (event) => {
   }
   event.waitUntil(
     (async () => {
-      if (!isSafari) {
+      if (!isApple) {
         const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
         if (windows.some((w) => w.focused && w.visibilityState === "visible")) return;
       }

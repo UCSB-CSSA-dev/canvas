@@ -2,7 +2,7 @@ import type { NotificationType } from "./constants";
 
 export type PushLocale = "zh" | "en";
 export type PushInput = {
-  type: NotificationType | "dm" | "test";
+  type: NotificationType | "dm" | "chat" | "test";
   params: Record<string, unknown>;
   link?: string;
   /** Replaces an earlier notification with the same tag on the device. */
@@ -19,6 +19,8 @@ const TEXT = {
   zh: {
     someone: "某人",
     aDepartment: "某部门",
+    general: "全体",
+    chatBody: "{actor}：{preview}",
     mention: "{actor} 提到了你",
     mentionAll: "{actor} @了所有人",
     reply: "{actor} 回复了你",
@@ -47,6 +49,8 @@ const TEXT = {
   en: {
     someone: "Someone",
     aDepartment: "a department",
+    general: "General",
+    chatBody: "{actor}: {preview}",
     mention: "{actor} mentioned you",
     mentionAll: "{actor} mentioned everyone",
     reply: "{actor} replied to you",
@@ -105,6 +109,11 @@ export function pushText(input: PushInput, locale: PushLocale, lookup: PushLooku
       return { title: text.testTitle, body: text.testBody };
     case "dm":
       return { title: person("actorId"), body: preview ?? text.attachment };
+    case "chat":
+      return {
+        title: name || (params.departmentId ? department() : text.general),
+        body: t("chatBody", { actor: person("actorId"), preview: preview ?? text.attachment }),
+      };
     case "mention":
       return { title: t(params.all ? "mentionAll" : "mention", { actor: person("actorId") }), body: preview };
     case "reply":

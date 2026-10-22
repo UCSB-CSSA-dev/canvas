@@ -113,6 +113,8 @@ async function notifyForMessage(
     mentionAll: boolean;
     replyTo: Doc<"messages"> | null;
     announcement?: boolean;
+    /** Edits only notify newly added mentions; the message itself was pushed when sent. */
+    edited?: boolean;
   },
 ) {
   const { viewer, channel, messageId } = args;
@@ -148,17 +150,26 @@ async function notifyForMessage(
       params: { ...base.params, all: true },
     });
   }
+  if (args.edited) return;
+
+  // Plain messages have no notification rows (the chat list shows unread counts), only a push.
+  const members = await ctx.db
+    .query("channelMembers")
+    .withIndex("by_channel", (q) => q.eq("channelId", channel._id))
+    .collect();
   if (channel.type === "dm") {
-    // DMs have no notification rows (the chat list shows unread counts), only a push.
-    const members = await ctx.db
-      .query("channelMembers")
-      .withIndex("by_channel", (q) => q.eq("channelId", channel._id))
-      .collect();
     const recipients = members
       .filter((m) => m.joinedAt !== undefined && !m.muted && !notified.has(m.userId))
       .map((m) => m.userId);
     await queuePush(ctx, recipients, { type: "dm", params: base.params, link: base.link, tag: messageId });
+    return;
   }
+  const muted = new Set(members.filter((m) => m.muted).map((m) => m.userId));
+  const recipients = (await channelAudience(ctx, channel)).filter((id) => !notified.has(id) && !muted.has(id));
+  const params: Record<string, unknown> = { ...base.params };
+  if (channel.name) params.name = channel.name;
+  if (channel.departmentId) params.departmentId = channel.departmentId;
+  await queuePush(ctx, recipients, { type: "chat", params, link: base.link, tag: messageId });
 }
 
 export const send = mutation({
@@ -278,6 +289,7 @@ export const edit = mutation({
         mentionIds: added,
         mentionAll: mentionAll && !message.mentionAll,
         replyTo: null,
+        edited: true,
       });
     }
   },

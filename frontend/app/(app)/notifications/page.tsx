@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 import { PageHeader } from "@/components/layout/app-shell";
 import { useNotificationText, type Notification } from "@/components/notifications/notification-text";
+import { PushReminder } from "@/components/notifications/push-reminder";
 import { PersonAvatar } from "@/components/people/person-avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,7 @@ export default function NotificationsPage() {
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-2xl flex-col gap-1 p-4">
+          <PushReminder />
           {status === "LoadingFirstPage" ? (
             [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)
           ) : results.length === 0 ? (

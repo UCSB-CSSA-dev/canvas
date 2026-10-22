@@ -1,7 +1,18 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
-import { EyeIcon, FileIcon, LoaderIcon, LockIcon, PaperclipIcon, PencilIcon, ReplyIcon, SendIcon, XIcon } from "lucide-react";
+import {
+  EyeIcon,
+  FileIcon,
+  LoaderIcon,
+  LockIcon,
+  MegaphoneIcon,
+  PaperclipIcon,
+  PencilIcon,
+  ReplyIcon,
+  SendIcon,
+  XIcon,
+} from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   useEffect,
@@ -18,6 +29,7 @@ import { PersonAvatar } from "@/components/people/person-avatar";
 import { matchesPerson } from "@/components/people/use-people";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, LIMITS, mentionToken, type Id } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
 import { thumbnail, uploadBlob } from "@/lib/image";
@@ -50,7 +62,7 @@ function encodeMentions(text: string, mentions: MentionMap) {
   return result;
 }
 
-export function Composer({ placeholder }: { placeholder: string }) {
+export function Composer({ name }: { name: string }) {
   const { channel } = useChat();
   const t = useTranslations("chat");
 
@@ -67,7 +79,7 @@ export function Composer({ placeholder }: { placeholder: string }) {
   if (!channel.access.canPost) {
     return <Banner icon={<LockIcon className="size-4" />}>{t("announcementOnly")}</Banner>;
   }
-  return <Editor key={channel._id} placeholder={placeholder} />;
+  return <Editor key={channel._id} name={name} />;
 }
 
 function Banner({ icon, children, tone }: { icon: ReactNode; children: ReactNode; tone?: "gold" }) {
@@ -84,7 +96,7 @@ function Banner({ icon, children, tone }: { icon: ReactNode; children: ReactNode
   );
 }
 
-function Editor({ placeholder }: { placeholder: string }) {
+function Editor({ name }: { name: string }) {
   const t = useTranslations("chat");
   const locale = useLocale() as Locale;
   const { channel, replyTo, setReplyTo, editing, setEditing } = useChat();
@@ -100,6 +112,7 @@ function Editor({ placeholder }: { placeholder: string }) {
   const [body, setBody] = useState("");
   const [mentions, setMentions] = useState<MentionMap>(new Map());
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const [announce, setAnnounce] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -149,6 +162,8 @@ function Editor({ placeholder }: { placeholder: string }) {
   const encoded = encodeMentions(body, mentions).trim();
   const tooLong = encoded.length > LIMITS.messageBody;
   const canSend = !uploading && !tooLong && (encoded.length > 0 || (!editing && readyIds.length > 0));
+  const announcing = announce && !editing && channel.access.canAnnounce;
+  const placeholder = t(announcing ? "announcementPlaceholder" : "messagePlaceholder", { name });
 
   const resetDraft = () => {
     setBody("");
@@ -167,22 +182,25 @@ function Editor({ placeholder }: { placeholder: string }) {
       }
       return;
     }
-    const snapshot = { body, mentions, uploads, replyTo };
+    const snapshot = { body, mentions, uploads, replyTo, announcing };
     resetDraft();
     setUploads([]);
     setReplyTo(null);
+    setAnnounce(false);
     try {
       await send({
         channelId: channel._id,
         body: encoded,
         replyToId: snapshot.replyTo?._id,
         attachmentIds: readyIds.length ? readyIds : undefined,
+        announcement: snapshot.announcing || undefined,
       });
     } catch (error) {
       setBody(snapshot.body);
       setMentions(snapshot.mentions);
       setUploads(snapshot.uploads);
       setReplyTo(snapshot.replyTo);
+      setAnnounce(snapshot.announcing);
       showError(error);
     }
   };
@@ -305,7 +323,7 @@ function Editor({ placeholder }: { placeholder: string }) {
   };
 
   return (
-    <div className="relative shrink-0 border-t border-border p-3">
+    <div className={cn("relative shrink-0 border-t p-3", announcing ? "border-warning/60 bg-warning/5" : "border-border")}>
       {mentionQuery !== null && candidates.length > 0 ? (
         <div className="absolute bottom-full left-3 z-20 mb-1 w-72 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
           {candidates.map((c, i) => (
@@ -329,6 +347,13 @@ function Editor({ placeholder }: { placeholder: string }) {
               <span className="truncate">{c === "all" ? t("mentionAllHint") : displayName(c, locale)}</span>
             </button>
           ))}
+        </div>
+      ) : null}
+
+      {announcing ? (
+        <div className="mb-2 flex items-center gap-2 text-xs text-warning">
+          <MegaphoneIcon className="size-3.5" />
+          {t("announceOn")}
         </div>
       ) : null}
 
@@ -386,6 +411,23 @@ function Editor({ placeholder }: { placeholder: string }) {
             <Button size="icon-lg" variant="ghost" aria-label={t("attach")} onClick={() => fileRef.current?.click()}>
               <PaperclipIcon />
             </Button>
+            {channel.access.canAnnounce ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon-lg"
+                    variant="ghost"
+                    aria-label={t("announce")}
+                    aria-pressed={announce}
+                    className={cn(announce && "bg-warning/15 text-warning hover:bg-warning/20 hover:text-warning")}
+                    onClick={() => setAnnounce((on) => !on)}
+                  >
+                    <MegaphoneIcon />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("announce")}</TooltipContent>
+              </Tooltip>
+            ) : null}
           </>
         ) : null}
         <Textarea

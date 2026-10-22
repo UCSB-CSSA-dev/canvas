@@ -101,24 +101,94 @@ describe("core chat", () => {
     expect(await alice.as.query(api.notifications.unreadCount, {})).toBe(0);
   });
 
-  test("announcement channels: leads and admins post, members react and get notified", async () => {
+  test("announcements: 部长 and admins post them in their chats, everyone is notified until they acknowledge", async () => {
     const t = setup();
-    const { lead, alice, bob } = await team(t);
-    const channels = await alice.as.query(api.channels.listMine, {});
-    const announcement = channels.announcements.find((c) => c.nameEn === "Events");
-    expect(announcement).toBeDefined();
-    expect(channels.announcements.some((c) => c.departmentId === undefined)).toBe(true);
+    const { admin, lead, alice, bob, events } = await team(t);
+    const org = (await alice.as.query(api.channels.listMine, {})).org[0]._id;
+    const unseen = async (as: As, channelId: typeof events) => {
+      const lists = await as.query(api.channels.listMine, {});
+      return [...lists.org, ...lists.departments].find((c) => c._id === channelId)!.unseenAnnouncements;
+    };
 
     await expect(
-      alice.as.mutation(api.messages.send, { channelId: announcement!._id, body: "hi" }),
+      alice.as.mutation(api.messages.send, { channelId: events, body: "hi", announcement: true }),
     ).rejects.toThrow(/FORBIDDEN/);
-    const id = await lead.as.mutation(api.messages.send, { channelId: announcement!._id, body: "周五开会" });
+    await expect(
+      lead.as.mutation(api.messages.send, { channelId: org, body: "hi", announcement: true }),
+    ).rejects.toThrow(/FORBIDDEN/);
+    expect((await admin.as.query(api.channels.get, { channelId: org }))?.access.canAnnounce).toBe(true);
+
+    await bob.as.mutation(api.channels.setMuted, { channelId: events, muted: true });
+    const id = await lead.as.mutation(api.messages.send, { channelId: events, body: "周五开会", announcement: true });
     expect(await alice.as.query(api.notifications.unreadCount, {})).toBe(1);
     expect(await bob.as.query(api.notifications.unreadCount, {})).toBe(1);
+    expect(await unseen(alice.as, events)).toBe(1);
+    expect(await unseen(lead.as, events)).toBe(0);
+    const [message] = await messages(alice.as, events);
+    expect(message.announcement).toBe(true);
+
+    // Reading the chat doesn't dismiss the announcement; acknowledging it does.
+    await alice.as.mutation(api.channels.markRead, { channelId: events });
+    const bar = await alice.as.query(api.channels.unseenAnnouncementList, { channelId: events });
+    expect(bar.map((m) => m._id)).toEqual([id]);
+    await alice.as.mutation(api.channels.markAnnouncementsSeen, { channelId: events });
+    expect(await unseen(alice.as, events)).toBe(0);
+    expect(await alice.as.query(api.channels.unseenAnnouncementList, { channelId: events })).toEqual([]);
+    expect(await unseen(bob.as, events)).toBe(1);
+
     await alice.as.mutation(api.messages.toggleReaction, { messageId: id, emoji: "✅" });
-    await expect(
-      alice.as.mutation(api.channels.setMuted, { channelId: announcement!._id, muted: true }),
-    ).rejects.toThrow(/FORBIDDEN/);
+    await lead.as.mutation(api.messages.recall, { messageId: id });
+    expect(await unseen(bob.as, events)).toBe(0);
+  });
+
+  test("legacy announcement channels merge into their department chat", async () => {
+    const t = setup();
+    const { lead, alice, bob, events } = await team(t);
+    const departmentId = (await t.run((ctx) => ctx.db.get("channels", events)))!.departmentId!;
+    const { legacy, first, second } = await t.run(async (ctx) => {
+      const legacy = await ctx.db.insert("channels", { type: "announcement", departmentId });
+      const first = await ctx.db.insert("messages", {
+        channelId: legacy,
+        authorId: lead.userId,
+        body: "old news",
+        kind: "user",
+      });
+      await ctx.db.insert("messages", {
+        channelId: legacy,
+        authorId: lead.userId,
+        body: "",
+        kind: "system",
+        system: { event: "retention_changed", params: {} },
+      });
+      const second = await ctx.db.insert("messages", {
+        channelId: legacy,
+        authorId: lead.userId,
+        body: "new news",
+        kind: "user",
+      });
+      const firstAt = (await ctx.db.get("messages", first))!._creationTime;
+      await ctx.db.insert("channelMembers", { channelId: legacy, userId: alice.userId, lastReadAt: firstAt });
+      await ctx.db.insert("notifications", {
+        userId: bob.userId,
+        type: "announcement",
+        params: { actorId: lead.userId, channelId: legacy },
+        link: `/chat/?c=${legacy}&m=${second}`,
+        messageId: second,
+      });
+      return { legacy, first, second };
+    });
+
+    await t.mutation(internal.maintenance.mergeAnnouncementChannels, {});
+
+    expect(await t.run((ctx) => ctx.db.get("channels", legacy))).toBeNull();
+    const merged = await messages(alice.as, events);
+    expect(merged.filter((m) => m.announcement).map((m) => m._id)).toEqual([second, first]);
+    expect(merged.some((m) => m.kind === "system")).toBe(false);
+    // Alice had read up to the first announcement in the old channel.
+    const bar = await alice.as.query(api.channels.unseenAnnouncementList, { channelId: events });
+    expect(bar.map((m) => m._id)).toEqual([second]);
+    const [notification] = (await bob.as.query(api.notifications.listMine, { paginationOpts: page })).page;
+    expect(notification.link).toBe(`/chat/?c=${events}&m=${second}`);
   });
 
   test("messages older than the chat's retention are purged", async () => {

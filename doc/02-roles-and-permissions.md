@@ -176,13 +176,13 @@ Implemented by `channelAccess` in `backend/convex/lib/channels.ts`. Through over
 | Add or remove group members | Y: anyone | Dept: members of departments they lead | N (can leave) |
 | Start DM with any approved user | Y | Y | Y |
 | Post in department channel | Y | Y (own dept) | Y (own dept) |
-| Post in announcement channel | Y | Dept announcement channel only | N (can react) |
+| Post an announcement (公告, notifies everyone in the chat) | Y in 全体 and department chats | Own department's chat only | N (can react) |
 | `@all` | Y | Own department channels | N |
 | Edit own message (history visible to the chat) | Y | Y | Y |
 | Recall own message within 5 minutes | Y | Y | Y |
 | Remove others' messages (moderation, audit logged) | Y | N | N |
 | Change a chat's retention (15 days to 1 year) | Y (DMs: admins only) | Dept channels and groups they manage | N |
-| Start a chat app (接龙, 投票, 集会) or approve a proposed one | Y in org, announcement, and groups they're in | Dept channels and groups they manage | N: propose one instead |
+| Start a chat app (接龙, 投票, 集会) or approve a proposed one | Y in org, department chats, and groups they're in | Dept channels and groups they manage | N: propose one instead |
 
 ### Files
 

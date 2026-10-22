@@ -15,6 +15,8 @@ export const LIMITS = {
   departmentName: 40,
   messagesPageSize: 50,
   unreadCountCap: 99,
+  /** Unacknowledged announcements loaded for the bar at the top of a chat. */
+  announcementBar: 20,
   leadsPerDepartment: 2,
   bio: 160,
   /** Avatars are resized to 256px in the browser; this only guards against bypassing that. */

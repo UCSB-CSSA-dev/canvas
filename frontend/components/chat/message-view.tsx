@@ -6,6 +6,7 @@ import {
   CornerUpLeftIcon,
   ForwardIcon,
   ListChecksIcon,
+  MegaphoneIcon,
   MoreHorizontalIcon,
   PencilIcon,
   ShieldXIcon,
@@ -177,6 +178,8 @@ function MessageList({ messages, highlightId }: { messages: Message[]; highlight
       !newDay &&
       previous.kind !== "system" &&
       message.kind !== "system" &&
+      !previous.announcement &&
+      !message.announcement &&
       previous.authorId === message.authorId &&
       message._creationTime - previous._creationTime < GROUP_WINDOW_MS;
     return (
@@ -215,6 +218,9 @@ function MessageRow({ message, grouped, highlighted }: { message: Message; group
       className={cn(
         "group relative flex gap-3 rounded-md py-0.5 pr-2 hover:bg-surface-hover",
         !grouped && "mt-2",
+        message.announcement &&
+          message.state === "normal" &&
+          "-ml-2 border-l-2 border-warning bg-warning/5 py-1.5 pl-1.5 hover:bg-warning/10",
         highlighted && "bg-primary/10 ring-1 ring-primary/40",
         selecting && selectable && "cursor-pointer",
         isSelected && "bg-primary/10",
@@ -238,6 +244,12 @@ function MessageRow({ message, grouped, highlighted }: { message: Message; group
             <span className={cn("text-sm font-medium", author?.status === "deactivated" && "text-muted-foreground line-through")}>
               {author ? displayName(author, locale) : t("unknownUser")}
             </span>
+            {message.announcement && message.state === "normal" ? (
+              <span className="flex items-center gap-1 self-center rounded-sm bg-warning/15 px-1.5 text-[11px] leading-4.5 font-medium text-warning">
+                <MegaphoneIcon className="size-3" />
+                {t("announcementTag")}
+              </span>
+            ) : null}
             <span className="text-xs text-subtle-foreground">{time}</span>
           </div>
         )}

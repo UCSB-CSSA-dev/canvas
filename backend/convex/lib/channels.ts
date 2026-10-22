@@ -2,6 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { LIMITS } from "./constants";
 import { appError } from "./errors";
+import { isLiveUserContent } from "./messages";
 import { findMembership } from "./memberships";
 import { buildViewerContext, isLeadOf, type ViewerContext } from "./permissions";
 
@@ -13,6 +14,8 @@ export type ChannelAccess = {
   via: Via | null;
   readOnly: ReadOnlyReason | null;
   canPost: boolean;
+  /** Can post announcements: admins in the org chat, the department's 部长 and admins in a department chat. */
+  canAnnounce: boolean;
   /** Can react, reply, recall, and respond to chat apps (participants of writable chats). */
   canInteract: boolean;
   /** Group chats: rename, add or remove members and departments, end. */
@@ -30,6 +33,7 @@ const NO_ACCESS: ChannelAccess = {
   via: null,
   readOnly: null,
   canPost: false,
+  canAnnounce: false,
   canInteract: false,
   canManage: false,
   canModerate: false,
@@ -182,7 +186,7 @@ async function readOnlyReason(
   channel: Doc<"channels">,
 ): Promise<ReadOnlyReason | null> {
   if (channel.type === "group" && channel.endedAt) return "ended";
-  if ((channel.type === "department" || channel.type === "announcement") && channel.departmentId) {
+  if (channel.departmentId) {
     const department = await ctx.db.get("departments", channel.departmentId);
     if (!department || department.archivedAt) return "archived";
   }
@@ -217,49 +221,38 @@ export async function channelAccess(
     leadsInvolved = departmentIds.some((id) => viewer.ledDepartmentIds.includes(id));
   }
 
-  let canPost = writable;
-  if (channel.type === "announcement") {
-    canPost = writable && (viewer.isAdmin || leadsChannelDepartment);
-  }
+  // Legacy announcement channels stay read-only until the merge migration removes them.
+  const canPost = writable && channel.type !== "announcement";
+  const leadsOwnChannel =
+    viewer.isAdmin || (channel.type === "department" && leadsChannelDepartment);
 
   let canApproveApps = false;
   switch (channel.type) {
     case "org":
-      canApproveApps = viewer.isAdmin;
-      break;
-    case "announcement":
-      canApproveApps = canPost;
-      break;
     case "department":
-      canApproveApps = viewer.isAdmin || leadsChannelDepartment;
+      canApproveApps = leadsOwnChannel;
       break;
     case "group":
       canApproveApps = leadsInvolved || viewer.isAdmin;
       break;
-    case "dm":
-      canApproveApps = false;
   }
 
   let canSetRetention = viewer.isAdmin;
   if (channel.type === "group") canSetRetention ||= viewer.ledDepartmentIds.length > 0;
-  if (channel.type === "department" || channel.type === "announcement") {
-    canSetRetention ||= leadsChannelDepartment;
-  }
+  if (channel.type === "department") canSetRetention ||= leadsChannelDepartment;
 
   return {
     via: "member",
     readOnly,
     canPost,
+    canAnnounce: canPost && (channel.type === "org" || channel.type === "department") && leadsOwnChannel,
     canInteract: writable,
     canManage: channel.type === "group" && writable && (leadsInvolved || viewer.isAdmin),
     canModerate: viewer.isAdmin,
     canSetRetention: canSetRetention && (channel.type !== "group" || writable),
     canApproveApps: writable && canApproveApps,
     canProposeApps: writable && channel.type !== "dm",
-    canMentionAll:
-      canPost &&
-      (viewer.isAdmin ||
-        ((channel.type === "department" || channel.type === "announcement") && leadsChannelDepartment)),
+    canMentionAll: canPost && (viewer.isAdmin || (channel.type === "department" && leadsChannelDepartment)),
   };
 }
 
@@ -289,7 +282,7 @@ export async function userParticipates(ctx: QueryCtx, userId: Id<"users">, chann
  */
 export async function channelAudience(ctx: QueryCtx, channel: Doc<"channels">): Promise<Id<"users">[]> {
   const ids = new Set<Id<"users">>();
-  if (channel.type === "org" || (channel.type === "announcement" && !channel.departmentId)) {
+  if (channel.type === "org") {
     const users = await ctx.db
       .query("users")
       .withIndex("by_status", (q) => q.eq("status", "approved"))
@@ -341,6 +334,30 @@ export async function presidiumUserIds(ctx: QueryCtx): Promise<Id<"users">[]> {
   for (const admin of admins) ids.add(admin._id);
   const users = await Promise.all([...ids].map((id) => ctx.db.get("users", id)));
   return users.filter((u) => u?.status === "approved").map((u) => u!._id);
+}
+
+/** Messages before this count as read (and announcements as seen) for a channel the user never opened. */
+export function readBaseline(user: Doc<"users">) {
+  return user.reviewedAt ?? user._creationTime;
+}
+
+/** Live announcements by others that the user hasn't acknowledged yet, newest first. */
+export async function unseenAnnouncements(
+  ctx: QueryCtx,
+  channelId: Id<"channels">,
+  user: Doc<"users">,
+  row: Doc<"channelMembers"> | null,
+  limit: number,
+) {
+  const since = row?.announcementsReadAt ?? readBaseline(user);
+  const rows = await ctx.db
+    .query("messages")
+    .withIndex("by_channel_announcement", (q) =>
+      q.eq("channelId", channelId).eq("announcement", true).gt("_creationTime", since),
+    )
+    .order("desc")
+    .take(limit);
+  return rows.filter((m) => m.authorId !== user._id && isLiveUserContent(m));
 }
 
 /** Sets read state to now, creating the row lazily. Never adds membership. */

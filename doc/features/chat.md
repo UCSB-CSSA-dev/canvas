@@ -2,7 +2,7 @@
 
 ## Summary
 
-Real-time messaging similar to GroupMe or WeChat: org-wide and department channels, announcement channels, group chats that belong to departments, and direct messages. Built on Convex subscriptions, so there is no websocket code. Chats are monitored (see [Oversight](#oversight)) and content expires (see [Retention](#retention)).
+Real-time messaging similar to GroupMe or WeChat: org-wide and department channels (with announcements posted inside them), group chats that belong to departments, and direct messages. Built on Convex subscriptions, so there is no websocket code. Chats are monitored (see [Oversight](#oversight)) and content expires (see [Retention](#retention)).
 
 The decisions behind this design are in [09-roadmap.md, Stage 2](../09-roadmap.md#stage-2-full-chat-and-oversight-完整聊天与监督).
 
@@ -10,37 +10,49 @@ The decisions behind this design are in [09-roadmap.md, Stage 2](../09-roadmap.m
 
 | Type | Created by | Who reads | Who posts | Name |
 | --- | --- | --- | --- | --- |
-| `org` | Seed | All approved users (implicit) | All approved users | "全体 / General" |
-| `announcement` (org-wide) | Seed | All approved users (implicit) | Admins | "CSSA 公告 / CSSA announcements" |
-| `announcement` (department) | With the department | That department's members (derived) | That department's 部长, admins | "{部门}公告" |
-| `department` | With the department | That department's members (derived) | Readers | Department name |
+| `org` | Seed | All approved users (implicit) | All approved users; announcements: admins | "全体 / General" |
+| `department` | With the department | That department's members (derived) | Readers; announcements: that department's 部长, admins | Department name |
 | `group` | Proposal approved by a 部长, or created directly by a 部长 / admin | Explicit members, plus the 部长 of every involved department (derived), plus 主席团 during a takeover | Readers | Custom name |
 | `dm` | Any approved user | Exactly 2 | Both, unless one is deactivated | Other person's name |
 
-"Derived" access is computed on every read from `departmentMemberships`, so roster changes apply immediately. A `channelMembers` row is created lazily the first time someone opens an implicit channel; it holds `lastReadAt` and `muted`. Group and DM members are stored explicitly (`channelMembers.joinedAt` is set for explicit group members).
+"Derived" access is computed on every read from `departmentMemberships`, so roster changes apply immediately. A `channelMembers` row is created lazily the first time someone opens an implicit channel; it holds `lastReadAt`, `announcementsReadAt`, and `muted`. Group and DM members are stored explicitly (`channelMembers.joinedAt` is set for explicit group members).
 
-Every access decision goes through `channelAccess` in `backend/convex/lib/channels.ts`, which returns `{ via: "member" | "oversight", readOnly, canPost, canInteract, canManage, canModerate, canSetRetention, canApproveApps, canProposeApps, canMentionAll }`.
+Every access decision goes through `channelAccess` in `backend/convex/lib/channels.ts`, which returns `{ via: "member" | "oversight", readOnly, canPost, canAnnounce, canInteract, canManage, canModerate, canSetRetention, canApproveApps, canProposeApps, canMentionAll }`.
+
+Until 2026-10 announcements had their own `announcement` channels ("CSSA 公告", "{部门}公告"). `maintenance.mergeAnnouncementChannels` folds them into the org chat and each department's chat: messages move over flagged as announcements, the old read position becomes `announcementsReadAt`, chat apps and notification links follow, and the old channel is deleted. The hourly `maintenance.seed` starts it whenever a legacy channel is left. The `announcement` channel type stays in the schema only for that migration and for old forward snapshots.
+
+## Announcements (公告)
+
+- Admins in 全体, and a department's 部长 and admins in that department's chat, see a megaphone toggle ("发布为公告") next to the attach button. While it's on, the composer turns amber and says everyone will be notified; it switches off after sending.
+- `messages.send` with `announcement: true` requires `canAnnounce`. The message is stored with `announcement: true` and notifies everyone who reads the chat except the author (type `announcement`, batches of 200, with push), even if they muted the chat. Mentions and replies inside an announcement add no separate notifications.
+- In the timeline an announcement has an amber left border and a "公告" tag next to the author, and never groups with neighboring messages.
+- **Unseen until acknowledged:** reading the chat doesn't dismiss an announcement. `channelMembers.announcementsReadAt` tracks acknowledgement separately from `lastReadAt`:
+  - The chat list shows an amber badge with a megaphone and the count of unseen announcements instead of the gold unread badge. It shows even when the chat is muted.
+  - Opening the chat shows a bar under the header with the newest unseen announcement ("N 条未读公告 · 作者：内容"). Tapping it jumps to the message; the arrow steps through older unseen ones; "知道了" acknowledges all of them (`channels.markAnnouncementsSeen`).
+- Recalled or removed announcements stop counting.
 
 ## Layout
 
 ```text
 +-------------------+---------------------------------------------+
-| 公告              | 迎新海报                      👁  🔍  ⋮      |
-|   CSSA 公告   (2) |---------------------------------------------|
-| 全体              | [投票 · 午餐选什么 · 12人] [接龙 · 报名 · 8人] [+]|
-|   全体            |---------------------------------------------|
-| 部门              |  Alice  10:02                               |
-|   活动部      (5) |  明天活动的物资清单已上传                    |
+| 全体              | 活动部                        👁  🔍  ⋮      |
+|   全体     (📢2)  |---------------------------------------------|
+| 部门              | 📢 2 条未读公告 · Lisa：周五 6 点开会  ⌄ 知道了|
+|   活动部      (5) |---------------------------------------------|
+|                   | [投票 · 午餐选什么 · 12人] [接龙 · 报名 · 8人] [+]|
+|                   |---------------------------------------------|
+|                   |  Alice  10:02                               |
+|                   |  明天活动的物资清单已上传                    |
 | 群聊        📋 +  |  Bob  10:05   (已编辑)                       |
 |   迎新海报        |  @Alice 收到                       👍 2      |
 | 私信          +   |                                             |
 |   Carol      (1)  |---------------------------------------------|
-| 监督              | 📎  发送消息到 迎新海报               [发送] |
+| 监督              | 📎 📢  发送消息到 活动部              [发送] |
 |   查看成员聊天 ▸  |                                             |
 +-------------------+---------------------------------------------+
 ```
 
-- Unread counts are gold badges; muted chats show a grey dot instead. Ended groups and archived channels are dimmed with a tag.
+- Unread counts are gold badges; muted chats show a grey dot instead. Unseen announcements replace the badge with an amber megaphone badge (see [Announcements](#announcements-公告)). Ended groups and archived channels are dimmed with a tag.
 - The 群聊 header has the proposals button (with a dot when something waits for the viewer) and "+" (propose for 部员, create for 部长 and admins).
 - The 监督 section shows only for admins and 部长.
 - Below the `lg` breakpoint (1024px), including tablets where the app sidebar is still shown, the channel list and the conversation are separate screens; the conversation header has a back arrow to the list. From `lg` up they sit side by side and the org channel opens by default.
@@ -54,13 +66,13 @@ Every access decision goes through `channelAccess` in `backend/convex/lib/channe
 - Up to 4,000 characters.
 - Mentions are stored in the body as `<@userId>` and `<@all>`, so renamed people display correctly. The composer shows "@Name" and encodes on send. `@all` is for admins anywhere they post and 部长 in their own department channels.
 - Replies quote another message in the same channel; the quote shows a placeholder if the original was recalled, removed, or purged. Clicking it jumps to the original.
-- Reactions: a fixed set (👍 ❤️ 😂 🎉 👀 🙏 ✅ 🔥), including in announcement channels; the tooltip shows who reacted.
+- Reactions: a fixed set (👍 ❤️ 😂 🎉 👀 🙏 ✅ 🔥), including on announcements; the tooltip shows who reacted.
 
 ### Actions
 
 | Action | Who | Behavior |
 | --- | --- | --- |
-| Send | Readers who can post | Mentions and replies notify; announcement posts notify every reader |
+| Send | Readers who can post | Mentions and replies notify; announcements notify every reader |
 | Edit | Author, any time | Previous version saved to `messageEdits`; shows "(已编辑)"; anyone who can read the chat can open the history |
 | Recall (撤回) | Author, within 5 minutes of sending (server time) | Content, reactions, edit history, attachments, and its notifications are erased; shows "{name} 撤回了一条消息" |
 | Remove | 主席团 and system admins | Same erasure as recall; shows "该消息已被主席团移除"; audit logged as `message.moderate_remove` |
@@ -72,13 +84,13 @@ There is no delete. Recall, edit, and react are never available through oversigh
 ### Read state and loading
 
 - `messages.list` is paginated, 50 per page, newest first; the view loads older pages on demand.
-- Members mark a channel read when they view it. Oversight never changes read state.
+- Members mark a channel read when they view it; announcements stay unseen until acknowledged. Oversight never changes read state.
 - `messages.around` loads the messages around one message, for search results, reply quotes, and notification links. A purged target shows "这条消息已超过保留期限".
 
 ## Retention
 
 - Messages are deleted from the server after the chat's `retentionDays`: 15 by default, or 30, 90, 180, 365.
-- Admins can change it on any chat; 部长 on their own department and announcement channels and on groups they manage; DMs are admin-only. Every change posts a system message and writes `channel.retention_change`.
+- Admins can change it on any chat; 部长 on their own department's chat and on groups they manage; DMs are admin-only. Every change posts a system message and writes `channel.retention_change`.
 - An hourly cron (`maintenance.purgeMessages`) deletes expired messages with their reactions and edit history, 500 per run, rescheduling itself. Ended groups are deleted entirely once their retention has passed.
 - The bottom of each chat says how long messages are kept.
 
@@ -100,7 +112,7 @@ There is no delete. Recall, edit, and react are never available through oversigh
 
 ## Chat apps
 
-接龙 (sign-up list), 投票 (vote), and 集会 (weekly meeting finder) run inside org, department, announcement, and group chats; at most 5 at a time per chat. Running apps show as chips under the header, up to 3 plus "更多"; a chip opens a side panel. Approvers start apps directly; other participants propose and an approver reviews. Full rules are in [09-roadmap.md, step 2.9](../09-roadmap.md#29-chat-apps-接龙投票集会).
+接龙 (sign-up list), 投票 (vote), and 集会 (weekly meeting finder) run inside org, department, and group chats; at most 5 at a time per chat. Running apps show as chips under the header, up to 3 plus "更多"; a chip opens a side panel. Approvers start apps directly; other participants propose and an approver reviews. Full rules are in [09-roadmap.md, step 2.9](../09-roadmap.md#29-chat-apps-接龙投票集会).
 
 ## Multi-select
 
@@ -115,7 +127,7 @@ There is no delete. Recall, edit, and react are never available through oversigh
 
 ## Oversight
 
-- Every chat header shows an eye icon; hovering (or tapping) lists who can view it besides its participants, from `channels.watchers`. `org` and announcement channels say they're visible to all members.
+- Every chat header shows an eye icon; hovering (or tapping) lists who can view it besides its participants, from `channels.watchers`. The `org` chat says it's visible to all members.
 - Admins and 部长 pick a person under 监督 (or "查看聊天（监督）" on the roster) to see that person's DMs, groups, and department channels they can only read through oversight (`channels.oversightChannels`).
 - Opening such a chat shows a gold read-only banner and calls `channels.recordOversightOpen`, which writes `oversight.channel.open` at most once per 10 minutes per viewer and chat.
 - If access ends while the chat is open, `channels.get` returns null and the view says the viewer no longer has access.
@@ -125,7 +137,7 @@ There is no delete. Recall, edit, and react are never available through oversigh
 
 In-app only in Stage 2 (`/notifications`, with a count on the nav item):
 - `mention` (including `@all`) and `reply`;
-- `announcement` for every reader of an announcement channel except the author, sent in batches of 200;
+- `announcement` for every reader of the chat except the author, sent in batches of 200;
 - group and chat-app events (`added_to_group`, `group_*`, `app_*`).
 
 Ordinary messages don't notify; unread badges cover them. Notification text is built from `type` and `params` in the viewer's language.
@@ -134,7 +146,7 @@ Ordinary messages don't notify; unread badges cover them. Notification text is b
 
 | Module | Functions |
 | --- | --- |
-| `channels` | `listMine`, `postable`, `get`, `participants`, `watchers`, `getOrCreateDm`, `markRead`, `setMuted`, `setRetention`, `recordOversightOpen`, `oversightPeople`, `oversightChannels` |
+| `channels` | `listMine`, `postable`, `get`, `participants`, `watchers`, `getOrCreateDm`, `markRead`, `unseenAnnouncementList`, `markAnnouncementsSeen`, `setMuted`, `setRetention`, `recordOversightOpen`, `oversightPeople`, `oversightChannels` |
 | `messages` | `list`, `around`, `history`, `search`, `send`, `edit`, `recall`, `moderateRemove`, `toggleReaction`, `forward` |
 | `attachments` | `generateUploadUrl`, `register`, `discard`; internal `expire` |
 | `groups` | `propose`, `cancelProposal`, `reviewProposal`, `listProposals`, `create`, `info`, `addMembers`, `removeMember`, `leave`, `rename`, `addDepartment`, `removeDepartment`, `end`; internal `expireProposals` |

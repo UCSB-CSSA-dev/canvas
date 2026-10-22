@@ -112,6 +112,7 @@ async function notifyForMessage(
     mentionIds: Id<"users">[];
     mentionAll: boolean;
     replyTo: Doc<"messages"> | null;
+    announcement?: boolean;
   },
 ) {
   const { viewer, channel, messageId } = args;
@@ -123,7 +124,8 @@ async function notifyForMessage(
   };
   const notified = new Set<Id<"users">>([viewer.user._id]);
 
-  if (channel.type === "announcement") {
+  // Announcements reach everyone in the chat, muted or not; mentions and replies add nothing.
+  if (args.announcement) {
     const audience = (await channelAudience(ctx, channel)).filter((id) => !notified.has(id));
     await notifyMany(ctx, audience, { type: "announcement", ...base });
     return;
@@ -165,11 +167,14 @@ export const send = mutation({
     body: v.string(),
     replyToId: v.optional(v.id("messages")),
     attachmentIds: v.optional(v.array(v.id("attachments"))),
+    announcement: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const viewer = await requireApproved(ctx);
     const { channel, access } = await requireChannelAccess(ctx, viewer, args.channelId);
     requirePost(access);
+    const announcement = args.announcement === true;
+    if (announcement && !access.canAnnounce) throw appError("FORBIDDEN");
 
     const attachmentIds = [...new Set(args.attachmentIds ?? [])];
     if (attachmentIds.length > LIMITS.attachmentsPerMessage) throw appError("INVALID", "attachments");
@@ -204,6 +209,7 @@ export const send = mutation({
       mentionUserIds: mentionIds,
       mentionAll,
       replyToId: replyTo?._id,
+      announcement: announcement || undefined,
       searchText: toSearchText(body),
     });
     const expiresAt = now + LIMITS.attachmentRetentionDays * 24 * 60 * 60 * 1000;
@@ -212,7 +218,16 @@ export const send = mutation({
     }
     await ctx.db.patch("channels", channel._id, { lastMessageAt: now });
     await touchReadState(ctx, channel._id, viewer.user._id, now);
-    await notifyForMessage(ctx, { viewer, channel, messageId, body, mentionIds, mentionAll, replyTo });
+    await notifyForMessage(ctx, {
+      viewer,
+      channel,
+      messageId,
+      body,
+      mentionIds,
+      mentionAll,
+      replyTo,
+      announcement,
+    });
     return messageId;
   },
 });

@@ -55,10 +55,10 @@ Use these terms consistently in code, UI, and docs.
 | 活动部 | Events Dept. | `events` (slug) | Example department |
 | 国际部 | International Dept. | `international` (slug) | Example department |
 | 宣传部 | Publicity Dept. | `publicity` (slug) | Example department |
-| 频道 | Channel | `channel` | Any chat room: department, group, DM, or announcement |
+| 频道 | Channel | `channel` | Any chat room: org-wide, department, group, or DM |
 | 群聊 | Group chat | `channel` with `type: "group"` | Custom multi-person chat |
 | 私信 | Direct message | `channel` with `type: "dm"` | One-on-one chat |
-| 公告 | Announcement | `channel` with `type: "announcement"` | Read-only for most, post by admins |
+| 公告 | Announcement | `message` with `announcement: true` | Posted in 全体 by admins or in a department chat by its 部长; highlighted until each reader taps 知道了 |
 | 文件 | Files | `file` / `folder` | Uploaded files and folder tree |
 | 任务 | Assignment | `assignment` | A task given to one or more users |
 | 提交 | Submission | `assignmentSubmission` | An assignee's response to an assignment |

@@ -8,14 +8,10 @@ export async function createDepartmentWithChannel(
 ): Promise<Id<"departments">> {
   const departmentId = await ctx.db.insert("departments", department);
   await ctx.db.insert("channels", { type: "department", departmentId });
-  await ctx.db.insert("channels", { type: "announcement", departmentId });
   return departmentId;
 }
 
-/**
- * Idempotent: creates the seed departments, the org channel, the org-wide announcement
- * channel, and any missing department announcement channels (added in Stage 2).
- */
+/** Idempotent: creates the seed departments and the org channel. */
 export async function ensureSeed(ctx: MutationCtx) {
   const anyDepartment = await ctx.db.query("departments").first();
   if (!anyDepartment) {
@@ -28,20 +24,6 @@ export async function ensureSeed(ctx: MutationCtx) {
     .withIndex("by_type", (q) => q.eq("type", "org"))
     .first();
   if (!orgChannel) await ctx.db.insert("channels", { type: "org" });
-
-  const announcements = await ctx.db
-    .query("channels")
-    .withIndex("by_type", (q) => q.eq("type", "announcement"))
-    .collect();
-  if (!announcements.some((c) => c.departmentId === undefined)) {
-    await ctx.db.insert("channels", { type: "announcement" });
-  }
-  const withAnnouncement = new Set(announcements.map((c) => c.departmentId));
-  for (const department of await ctx.db.query("departments").collect()) {
-    if (!withAnnouncement.has(department._id)) {
-      await ctx.db.insert("channels", { type: "announcement", departmentId: department._id });
-    }
-  }
 }
 
 export async function listActiveDepartments(ctx: QueryCtx) {

@@ -264,6 +264,9 @@ If an involved department is archived, or its last 部长 is removed or demoted,
 - New `groupProposals`: `proposerId`, `name`, `purpose`, `departmentIds`, `suggestedUserIds`, `status` (`pending`, `approved`, `rejected`, `cancelled`, `expired`), `reviewedBy`, `reviewNote`, `channelId`, `expiresAt`. Indexes by proposer and by status.
 
 **Announcement channels**
+
+> Changed 2026-10-22: announcements now live inside the 全体 and department chats as flagged messages, with their own unseen badge and a 知道了 bar; the channels below were merged by a migration. See [features/chat.md](features/chat.md#announcements-公告).
+
 - **Org-wide 全体公告:** admins post.
 - **Department announcement channels:** that department's leads and admins post. Each department gets one when it's created; a migration creates them for existing departments.
 - **Notifications:** every new post sends an `announcement` notification to every reader except the author. A scheduled internal mutation sends these in batches of 200.

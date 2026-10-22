@@ -19,6 +19,7 @@ export const locale = v.union(v.literal("zh"), v.literal("en"));
 
 export const channelType = v.union(
   v.literal("org"),
+  /** Legacy: no longer created; maintenance.mergeAnnouncementChannels folds them into org and department chats. */
   v.literal("announcement"),
   v.literal("department"),
   v.literal("group"),
@@ -131,7 +132,7 @@ export default defineSchema({
     type: channelType,
     /** Group chats only; other types derive their name. */
     name: v.optional(v.string()),
-    /** department and announcement channels; unset on the org-wide announcement channel. */
+    /** department channels (and legacy department announcement channels). */
     departmentId: v.optional(v.id("departments")),
     dmKey: v.optional(v.string()),
     createdBy: v.optional(v.id("users")),
@@ -178,11 +179,13 @@ export default defineSchema({
     .index("by_status", ["status"]),
 
   // Read state for every channel a user has opened, plus explicit membership for DMs and groups.
-  // Access to org, announcement, and department channels is derived from departmentMemberships.
+  // Access to org and department channels is derived from departmentMemberships.
   channelMembers: defineTable({
     channelId: v.id("channels"),
     userId: v.id("users"),
     lastReadAt: v.number(),
+    /** Announcements stay highlighted until acknowledged, independently of lastReadAt. */
+    announcementsReadAt: v.optional(v.number()),
     muted: v.optional(v.boolean()),
     /** Set for explicit DM and group members; read-state-only rows leave it unset. */
     joinedAt: v.optional(v.number()),
@@ -200,6 +203,8 @@ export default defineSchema({
     mentionUserIds: v.optional(v.array(v.id("users"))),
     mentionAll: v.optional(v.boolean()),
     replyToId: v.optional(v.id("messages")),
+    /** Posted as an announcement (org chat: admins; department chat: its 部长 and admins). */
+    announcement: v.optional(v.boolean()),
     editedAt: v.optional(v.number()),
     recalledAt: v.optional(v.number()),
     removedAt: v.optional(v.number()),
@@ -212,6 +217,7 @@ export default defineSchema({
     forward: v.optional(v.any()),
   })
     .index("by_channel", ["channelId"])
+    .index("by_channel_announcement", ["channelId", "announcement"])
     .searchIndex("search_text", { searchField: "searchText", filterFields: ["channelId"] }),
 
   /** Earlier versions of edited messages. */

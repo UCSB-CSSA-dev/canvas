@@ -12,14 +12,17 @@ import {
   isTakenOver,
   oversees,
   overseenUserIds,
+  readBaseline,
   requireChannelAccess,
   retentionDays,
   touchReadState,
+  unseenAnnouncements,
   type ChannelAccess,
 } from "./lib/channels";
 import { LIMITS, RETENTION_OPTIONS } from "./lib/constants";
 import { appError } from "./lib/errors";
 import { isLiveUserContent, postSystemMessage } from "./lib/messages";
+import { toMessageViews } from "./lib/messageViews";
 import { requireApproved, type ViewerContext } from "./lib/permissions";
 import { getUserSummaries, toUserSummary, type UserSummary } from "./lib/users";
 
@@ -36,6 +39,8 @@ export type ChannelView = {
   dmUsers?: UserSummary[];
   lastMessageAt?: number;
   unread: number;
+  /** Announcements not yet acknowledged; they ignore mute. */
+  unseenAnnouncements: number;
   muted: boolean;
   ended: boolean;
   archived: boolean;
@@ -55,14 +60,14 @@ async function toChannelView(
     name: channel.name,
     lastMessageAt: channel.lastMessageAt,
     unread: 0,
+    unseenAnnouncements: 0,
     muted: state?.muted === true,
     ended: channel.endedAt !== undefined,
     archived: false,
   };
 
   if (countUnread) {
-    const lastReadAt =
-      state?.lastReadAt ?? viewer.user.reviewedAt ?? viewer.user._creationTime;
+    const lastReadAt = state?.lastReadAt ?? readBaseline(viewer.user);
     const recent = await ctx.db
       .query("messages")
       .withIndex("by_channel", (q) => q.eq("channelId", channel._id).gt("_creationTime", lastReadAt))
@@ -70,6 +75,11 @@ async function toChannelView(
     view.unread = recent.filter(
       (m) => m.authorId !== viewer.user._id && isLiveUserContent(m),
     ).length;
+    if (channel.type === "org" || channel.type === "department") {
+      view.unseenAnnouncements = (
+        await unseenAnnouncements(ctx, channel._id, viewer.user, state, LIMITS.unreadCountCap + 20)
+      ).length;
+    }
   }
 
   if (channel.departmentId) {
@@ -115,14 +125,6 @@ export const listMine = query({
       .query("channels")
       .withIndex("by_type", (q) => q.eq("type", "org"))
       .collect();
-    const announcements = (
-      await ctx.db
-        .query("channels")
-        .withIndex("by_type", (q) => q.eq("type", "announcement"))
-        .collect()
-    )
-      .filter(visibleDepartment)
-      .sort((a, b) => sortOrder(a) - sortOrder(b));
     const departmentChannels = (
       await ctx.db
         .query("channels")
@@ -169,7 +171,6 @@ export const listMine = query({
     const views = (list: Doc<"channels">[]) => Promise.all(list.map((c) => toChannelView(ctx, viewer, c)));
     return {
       org: await views(org),
-      announcements: await views(announcements),
       departments: await views(departmentChannels),
       groups: (await views(groups)).sort(byRecent),
       dms: (await views(dmChannels)).sort(byRecent),
@@ -183,7 +184,7 @@ export const postable = query({
   handler: async (ctx) => {
     const viewer = await requireApproved(ctx);
     const ids = new Set<Id<"channels">>();
-    for (const type of ["org", "announcement", "department", "group"] as const) {
+    for (const type of ["org", "department", "group"] as const) {
       const channels = await ctx.db
         .query("channels")
         .withIndex("by_type", (q) => q.eq("type", type))
@@ -246,7 +247,7 @@ export const watchers = query({
   handler: async (ctx, args) => {
     const viewer = await requireApproved(ctx);
     const { channel } = await requireChannelAccess(ctx, viewer, args.channelId);
-    if (channel.type === "org" || channel.type === "announcement") return { visibleToAll: true, leads: [] };
+    if (channel.type === "org") return { visibleToAll: true, leads: [] };
 
     let ownerIds: Id<"users">[] = [];
     if (channel.type === "department" && channel.departmentId) {
@@ -327,12 +328,46 @@ export const markRead = mutation({
   },
 });
 
+/** Unacknowledged announcements for the bar at the top of a chat, newest first. */
+export const unseenAnnouncementList = query({
+  args: { channelId: v.id("channels") },
+  handler: async (ctx, args) => {
+    const viewer = await requireApproved(ctx);
+    const { channel, access } = await requireChannelAccess(ctx, viewer, args.channelId);
+    if (access.via !== "member") return [];
+    const row = await channelMemberRow(ctx, channel._id, viewer.user._id);
+    const messages = await unseenAnnouncements(ctx, channel._id, viewer.user, row, LIMITS.announcementBar);
+    return toMessageViews(ctx, viewer.user._id, messages);
+  },
+});
+
+/** Acknowledges every announcement in the chat up to now. */
+export const markAnnouncementsSeen = mutation({
+  args: { channelId: v.id("channels") },
+  handler: async (ctx, args) => {
+    const viewer = await requireApproved(ctx);
+    const { channel, access } = await requireChannelAccess(ctx, viewer, args.channelId);
+    if (access.via !== "member") return;
+    const now = Date.now();
+    const row = await channelMemberRow(ctx, channel._id, viewer.user._id);
+    if (row) await ctx.db.patch("channelMembers", row._id, { announcementsReadAt: now });
+    else {
+      await ctx.db.insert("channelMembers", {
+        channelId: channel._id,
+        userId: viewer.user._id,
+        lastReadAt: readBaseline(viewer.user),
+        announcementsReadAt: now,
+      });
+    }
+  },
+});
+
 export const setMuted = mutation({
   args: { channelId: v.id("channels"), muted: v.boolean() },
   handler: async (ctx, args) => {
     const viewer = await requireApproved(ctx);
     const { channel, access } = await requireChannelAccess(ctx, viewer, args.channelId);
-    if (access.via !== "member" || channel.type === "announcement") throw appError("FORBIDDEN");
+    if (access.via !== "member") throw appError("FORBIDDEN");
     const row = await channelMemberRow(ctx, channel._id, viewer.user._id);
     if (row) await ctx.db.patch("channelMembers", row._id, { muted: args.muted });
     else {

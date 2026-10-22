@@ -92,7 +92,7 @@ export function ChatHeader({
               {t("groupInfo")}
             </DropdownMenuItem>
           ) : null}
-          {isMember && channel.type !== "announcement" ? (
+          {isMember ? (
             <DropdownMenuItem
               onSelect={() => setMuted({ channelId: channel._id, muted: !channel.muted }).catch(showError)}
             >

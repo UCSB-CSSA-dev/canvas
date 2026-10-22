@@ -50,7 +50,7 @@ export default function AdminPage() {
     <>
       <PageHeader title={t("title")}>
         {viewer.isAdmin ? (
-          <Button asChild size="sm" variant="secondary">
+          <Button asChild size="sm" variant="secondary" className="hidden md:inline-flex">
             <Link href="/admin/audit/">
               <ScrollTextIcon />
               {t("auditLog")}

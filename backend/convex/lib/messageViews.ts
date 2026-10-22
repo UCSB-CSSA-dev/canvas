@@ -57,6 +57,7 @@ export type MessageView = {
   authorId: Id<"users">;
   body: string;
   state: MessageState;
+  announcement: boolean;
   editedAt?: number;
   removedBy?: Id<"users">;
   replyTo?: ReplyView;
@@ -202,6 +203,7 @@ export async function toMessageViews(
       authorId: message.authorId,
       body: state === "normal" ? message.body : "",
       state,
+      announcement: message.announcement === true,
       editedAt: message.editedAt,
       removedBy: message.removedBy,
       replyTo,

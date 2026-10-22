@@ -44,9 +44,6 @@ export function ChannelList({ lists, activeId }: { lists: ChannelLists; activeId
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="flex flex-col gap-4 p-2">
-        {lists.announcements.length > 0 ? (
-          <Section title={t("sectionAnnouncements")}>{lists.announcements.map(item)}</Section>
-        ) : null}
         <Section title={t("sectionGeneral")}>{lists.org.map(item)}</Section>
         {lists.departments.length > 0 ? (
           <Section title={t("sectionDepartments")}>{lists.departments.map(item)}</Section>
@@ -217,7 +214,9 @@ function ChannelItem({ channel, active, href }: { channel: Channel; active: bool
   const t = useTranslations("chat");
   const name = useChannelName()(channel);
   const unread = channel.unread;
+  const announcements = channel.unseenAnnouncements;
   const inactive = channel.ended || channel.archived;
+  const cap = (count: number) => (count > LIMITS.unreadCountCap ? `${LIMITS.unreadCountCap}+` : count);
 
   return (
     <Link
@@ -226,19 +225,27 @@ function ChannelItem({ channel, active, href }: { channel: Channel; active: bool
       className={cn(
         "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors",
         active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
-        unread > 0 && !active && !channel.muted && "font-medium text-foreground",
+        (announcements > 0 || (unread > 0 && !channel.muted)) && !active && "font-medium text-foreground",
         inactive && "opacity-60",
       )}
     >
       <ChannelIcon channel={channel} />
       <span className="min-w-0 flex-1 truncate">{name}</span>
       {inactive ? <span className="text-[10px]">{channel.ended ? t("endedTag") : t("archivedTag")}</span> : null}
-      {unread > 0 && !active ? (
+      {active ? null : announcements > 0 ? (
+        <span
+          className="flex items-center gap-0.5 rounded-full bg-warning px-1.5 text-[11px] leading-5 font-semibold text-primary-foreground"
+          aria-label={t("unseenAnnouncements", { count: announcements })}
+        >
+          <MegaphoneIcon className="size-3" />
+          {cap(announcements)}
+        </span>
+      ) : unread > 0 ? (
         channel.muted ? (
           <span className="size-2 rounded-full bg-muted-foreground" aria-label={t("unreadMuted")} />
         ) : (
           <span className="rounded-full bg-primary px-1.5 text-[11px] leading-5 font-semibold text-primary-foreground">
-            {unread > LIMITS.unreadCountCap ? `${LIMITS.unreadCountCap}+` : unread}
+            {cap(unread)}
           </span>
         )
       ) : null}
@@ -254,8 +261,6 @@ function ChannelIcon({ channel }: { channel: Channel }) {
       ) : (
         <UsersRoundIcon className="size-4 shrink-0" />
       );
-    case "announcement":
-      return <MegaphoneIcon className="size-4 shrink-0" />;
     case "group":
       return <UsersRoundIcon className="size-4 shrink-0" />;
     default:

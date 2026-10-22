@@ -167,7 +167,7 @@ export default defineSchema({
   channels: defineTable({
     type: v.union(
       v.literal("org"),            // org-wide general channel
-      v.literal("announcement"),   // org-wide (departmentId unset) or per department
+      v.literal("announcement"),   // legacy, merged into org/department chats (see below)
       v.literal("department"),     // one per department, access derived from memberships
       v.literal("group"),          // group chat belonging to departments
       v.literal("dm"),             // exactly two members
@@ -217,6 +217,7 @@ export default defineSchema({
     channelId: v.id("channels"),
     userId: v.id("users"),
     lastReadAt: v.number(),
+    announcementsReadAt: v.optional(v.number()), // announcements acknowledged ("知道了") up to here
     muted: v.optional(v.boolean()),
     joinedAt: v.optional(v.number()),        // explicit DM and group members only
     addedBy: v.optional(v.id("users")),
@@ -233,6 +234,7 @@ export default defineSchema({
     mentionUserIds: v.optional(v.array(v.id("users"))),
     mentionAll: v.optional(v.boolean()),
     replyToId: v.optional(v.id("messages")),
+    announcement: v.optional(v.boolean()),   // 公告: org chat (admins) or department chat (its 部长, admins)
     editedAt: v.optional(v.number()),
     recalledAt: v.optional(v.number()),
     removedAt: v.optional(v.number()),
@@ -242,6 +244,7 @@ export default defineSchema({
     forward: v.optional(v.any()),            // snapshot of forwarded messages
   })
     .index("by_channel", ["channelId"])                 // ordered by _creationTime
+    .index("by_channel_announcement", ["channelId", "announcement"]) // unseen announcements
     .searchIndex("search_text", { searchField: "searchText", filterFields: ["channelId"] }),
 
   messageEdits: defineTable({                // earlier versions of edited messages
@@ -457,7 +460,7 @@ export default defineSchema({
 ### departments
 
 - Seeded: 主席团 (`presidium`, kind `presidium`), plus regular departments such as 活动部 (`events`), 国际部 (`international`), 宣传部 (`publicity`). The full list is configurable by presidium.
-- Creating a department also creates its `department` channel (Stage 1). Later stages also create a department `announcement` channel and a root department folder.
+- Creating a department also creates its `department` channel (Stage 1), where its 部长 also post announcements. Stage 3 also creates a root department folder.
 
 ### departmentMemberships
 
@@ -492,8 +495,9 @@ deactivationRequests: defineTable({
 ### channels and channelMembers
 
 - Who can read a channel is decided by `channelAccess` in `backend/convex/lib/channels.ts` (see [02-roles-and-permissions.md](02-roles-and-permissions.md#chat-permission-matrix)):
-  - `org` and the org-wide `announcement`: every approved user.
-  - `department` and department `announcement`: anyone with a `departmentMemberships` row for that department, plus admins.
+  - `org`: every approved user.
+  - `department`: anyone with a `departmentMemberships` row for that department, plus admins.
+  - Legacy `announcement` channels (until `maintenance.mergeAnnouncementChannels` removes them): like the chat they merge into, read-only.
   - `group`: explicit members (`channelMembers.joinedAt` set), the 部长 of every department in `groupDepartments`, and 主席团 while any involved department is archived or has no 部长.
   - `dm`: only the two users with a `channelMembers` row.
   - Anyone else who oversees a participant reads through oversight (read-only).
@@ -501,6 +505,7 @@ deactivationRequests: defineTable({
 - `retentionDays` (unset = 15) drives the hourly purge; ended groups are deleted entirely once their retention has passed.
 - `dm` channels are unique per pair via `dmKey` (sorted user IDs joined with `:`).
 - Unread count = messages from other people with `_creationTime > lastReadAt`. With no row yet, `lastReadAt` defaults to the time the user was approved (or their account creation time). Displayed as `99+` above 99.
+- Unseen announcements = live `announcement` messages from other people with `_creationTime > announcementsReadAt` (same default), read through `by_channel_announcement`. Only `channels.markAnnouncementsSeen` moves `announcementsReadAt`, so reading the chat doesn't clear them.
 - Oversight readers are **not** added to `channelMembers`.
 
 ### messages
@@ -508,6 +513,7 @@ deactivationRequests: defineTable({
 - There is no delete. Recall (author, 5 minutes) and moderation removal (主席团) keep the row but erase the body, mentions, reactions, edit history, attachments, and related notifications; `recalledAt` or `removedAt` / `removedBy` record what happened.
 - Edits copy the previous body into `messageEdits` and set `editedAt`.
 - `kind: "system"` rows carry `system.event` and `params` and are translated on the client; `kind: "forward"` rows carry a snapshot in `forward`.
+- `announcement: true` marks a 公告. Only `messages.send` sets it (checked against `canAnnounce`); edits keep it.
 - Paginate with `.withIndex("by_channel", q => q.eq("channelId", id)).order("desc").paginate(opts)`.
 
 ### folders and files
@@ -527,7 +533,7 @@ deactivationRequests: defineTable({
 ## Seed data (`convex/seed.ts`, internal)
 
 1. Create departments: presidium, events, international, publicity (the rest are added from the roster page), each with its department channel.
-2. Create the `org` general channel. From Stage 2 on: the org-wide announcement channel. From Stage 3 on: the org root folder.
+2. Create the `org` general channel. From Stage 3 on: the org root folder.
 3. The seed is idempotent (safe to run twice) and runs automatically when the first user is created if no departments exist yet.
 
 There is no manual admin bootstrap step: the first account to sign in becomes system admin. See [features/accounts-and-onboarding.md](features/accounts-and-onboarding.md#first-account-becomes-system-admin).

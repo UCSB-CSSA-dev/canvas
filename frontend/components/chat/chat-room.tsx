@@ -8,6 +8,7 @@ import { AppBar } from "@/components/apps/app-bar";
 import { AppPanel, EndedAppsDialog } from "@/components/apps/app-panel";
 import { GroupInfoSheet } from "@/components/groups/group-info-sheet";
 import { api, LIMITS, type Id } from "@/lib/api";
+import { AnnouncementBar } from "./announcement-bar";
 import { ChatContext, type ChatState } from "./chat-context";
 import { ForwardDialog, HistoryDialog, RetentionDialog, SearchSheet, SelectionBar } from "./chat-dialogs";
 import { ChatHeader } from "./chat-header";
@@ -105,9 +106,10 @@ export function ChatRoom({
         onGroupInfo={() => setGroupOpen(true)}
         onEndedApps={() => setEndedOpen(true)}
       />
+      <AnnouncementBar />
       <AppBar onOpen={setAppId} />
       <MessageView focusId={focusId} onLeaveFocus={() => setFocusId(null)} />
-      {selecting ? <SelectionBar /> : <Composer placeholder={t("messagePlaceholder", { name })} />}
+      {selecting ? <SelectionBar /> : <Composer name={name} />}
 
       <ForwardDialog
         messageIds={forwarding}

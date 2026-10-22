@@ -94,7 +94,7 @@ export default function AuditPage() {
       <PageHeader
         title={
           <span className="flex items-center gap-2">
-            <Button asChild size="icon-sm" variant="ghost" aria-label={t("title")}>
+            <Button asChild size="icon-sm" variant="ghost" aria-label={t("title")} className="hidden md:inline-flex">
               <Link href="/admin/">
                 <ArrowLeftIcon />
               </Link>

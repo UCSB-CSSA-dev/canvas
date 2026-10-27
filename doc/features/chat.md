@@ -116,10 +116,10 @@ There is no delete. Recall, edit, and react are never available through oversigh
 
 ## Shared documents
 
-In department, group and DM chats (not 全体), any participant who can post can start a collaborative document from the composer's attach menu ("新建协作文档 / New shared document"). It posts a document card in the chat and opens the editor (see [assignments.md](assignments.md#documents)).
+In department, group and DM chats (not 全体), any participant who can post can start a collaborative document from the document button in the chat header, or the composer's attach menu ("新建协作文档 / New shared document"). It posts a document card in the chat and opens the editor (see [assignments.md](assignments.md#documents)).
 
 - Everyone who can post in the chat can edit it. The author or a chat manager can rename or delete it; moderators can delete it.
-- "文档 / Documents" in the chat menu lists every document of the chat (`documents.listForChat`), including ones whose card has expired with the chat history.
+- "聊天文档 / Chat documents" under the same header button lists every document of the chat (`documents.listForChat`), including ones whose card has expired with the chat history.
 - @mentions suggest the chat's participants. Document cards can't be edited, forwarded or multi-selected.
 - Up to 50 documents per chat (`LIMITS.documentsPerChat`).
 

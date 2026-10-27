@@ -65,6 +65,22 @@ describe("tasks", () => {
     expect(creatable.map((c) => c._id)).toEqual([events]);
   });
 
+  test("an admin can publish in a group chat without departments; files go to 公共", async () => {
+    const t = setup();
+    const { admin, alice, bob } = await team(t);
+    const channelId = await admin.as.mutation(api.groups.create, {
+      name: "Gala crew",
+      departmentIds: [],
+      memberIds: [alice.userId, bob.userId],
+    });
+    const creatable = await admin.as.query(api.assignments.creatableChannels, {});
+    expect(creatable.find((c) => c._id === channelId)?.spaces.map((s) => s.departmentId)).toEqual([null]);
+    const assignmentId = await admin.as.mutation(api.assignments.create, taskArgs(channelId, [], { everyone: true }));
+    const assignment = await t.run((ctx) => ctx.db.get("assignments", assignmentId));
+    expect(assignment?.status).toBe("open");
+    expect(assignment?.departmentId).toBeUndefined();
+  });
+
   test("publishing posts a card in the chat and notifies assignees", async () => {
     const t = setup();
     const { lead, alice, bob, events } = await team(t);

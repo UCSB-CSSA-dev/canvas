@@ -34,7 +34,10 @@ export function canCreateTaskIn(ctx: QueryCtx, viewer: ViewerContext, channel: D
   return managesTaskChannel(ctx, viewer, channel, { requireWritable: true });
 }
 
-/** File spaces a task in this chat can use: 公共 for 全体, the department, or a group's departments the viewer manages. */
+/**
+ * File spaces a task in this chat can use: 公共 for 全体, the department, or a group's departments
+ * the viewer manages (公共 when there are none, e.g. an admin in a group without departments).
+ */
 export async function taskSpaceOptions(
   ctx: QueryCtx,
   viewer: ViewerContext,
@@ -49,7 +52,7 @@ export async function taskSpaceOptions(
     if (!department || department.archivedAt) continue;
     if (viewer.isAdmin || isLeadOf(viewer, departmentId)) options.push(departmentId);
   }
-  return options;
+  return options.length > 0 ? options : [undefined];
 }
 
 export type TaskAccess = {

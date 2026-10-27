@@ -29,7 +29,7 @@ A task always belongs to one chat: 全体, a department chat, or a group chat. T
 | --- | --- | --- | --- |
 | 全体 | 主席团 | Anyone approved | 公共 |
 | A department chat | That department's 部长, and 主席团 | That department's members | That department |
-| A group chat | 部长 of an involved department, and 主席团 in the group | The group's members | One involved department, picked by the creator (default: the first one they lead) |
+| A group chat | 部长 of an involved department, and 主席团 in the group | The group's members | One involved department, picked by the creator (default: the first one they lead); 公共 if the group has no departments |
 
 - 部员 can't create tasks.
 - "Everyone in this chat" expands to individual people when the task is published. People who join later aren't added automatically, but the creator can add them.

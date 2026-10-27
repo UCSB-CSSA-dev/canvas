@@ -9,9 +9,11 @@ import {
   ClockIcon,
   EyeIcon,
   FilePenLineIcon,
+  FilesIcon,
   InfoIcon,
   ListChecksIcon,
   MoreVerticalIcon,
+  PlusIcon,
   SearchIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -45,6 +47,7 @@ export function ChatHeader({
   onGroupInfo,
   onEndedApps,
   onDocuments,
+  onNewDocument,
   extra,
 }: {
   title: string;
@@ -54,6 +57,7 @@ export function ChatHeader({
   onGroupInfo: () => void;
   onEndedApps: () => void;
   onDocuments: () => void;
+  onNewDocument: () => void;
   extra?: ReactNode;
 }) {
   const t = useTranslations("chat");
@@ -63,6 +67,7 @@ export function ChatHeader({
   const showError = useErrorToast();
   const { hidden, restore } = useHiddenMessages(viewer._id);
   const isMember = channel.access.via === "member";
+  const canStartDoc = isMember && channel.access.canPost && channel.access.canInteract;
 
   return (
     <PageHeader
@@ -83,6 +88,27 @@ export function ChatHeader({
       <Button size="icon-sm" variant="ghost" aria-label={t("searchTitle")} onClick={onSearch}>
         <SearchIcon />
       </Button>
+      {chatHasDocs(channel.type) ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-sm" variant="ghost" aria-label={t("documents")}>
+              <FilePenLineIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canStartDoc ? (
+              <DropdownMenuItem onSelect={onNewDocument}>
+                <PlusIcon />
+                {t("newDocument")}
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem onSelect={onDocuments}>
+              <FilesIcon />
+              {t("allDocuments")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="icon-sm" variant="ghost" aria-label={t("more")}>
@@ -108,12 +134,6 @@ export function ChatHeader({
             <DropdownMenuItem onSelect={onRetention}>
               <ClockIcon />
               {t("retentionMenu", { days: channel.retentionDays })}
-            </DropdownMenuItem>
-          ) : null}
-          {chatHasDocs(channel.type) ? (
-            <DropdownMenuItem onSelect={onDocuments}>
-              <FilePenLineIcon />
-              {t("documents")}
             </DropdownMenuItem>
           ) : null}
           {channel.type !== "dm" ? (

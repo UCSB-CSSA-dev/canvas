@@ -64,7 +64,21 @@
     "QUOTA_EXCEEDED": "This space is full. Delete some files or ask the Presidium for more room.",
     "FILE_TYPE_BLOCKED": "For safety, this file type can't be uploaded.",
     "DRIVE_NOT_CONFIGURED": "Large files go to Google Drive, but the Apps Script isn't connected yet. Ask the Presidium.",
-    "DRIVE_FAILED": "Uploading to Google Drive failed. Try again later."
+    "DRIVE_FAILED": "Uploading to Google Drive failed. Try again later.",
+    "invalid": {
+      "title": "Enter a title (up to 120 characters).",
+      "description": "The description is too long.",
+      "location": "The location is too long.",
+      "assignees": "Nobody to assign: this chat has no approved members yet, or someone you picked has left it. Add members first, or pick specific people.",
+      "departmentId": "Files can't be saved in that space. Pick another file space.",
+      "startAt": "Enter when the event starts.",
+      "endAt": "The end must be after the start.",
+      "eventId": "The event no longer exists or is closed. Pick it again.",
+      "fileIds": "An attachment was deleted or isn't in this task's folder. Remove it and try again.",
+      "status": "The task's status changed. Refresh the page and try again.",
+      "name": "The name can't be empty.",
+      "link": "Links must start with http:// or https://."
+    }
   },
   "signIn": {
     "title": "Sign in to CSSA Hub",
@@ -277,7 +291,8 @@
     "newTask": "Post a task or event",
     "saveToFiles": "Save to Files",
     "documents": "Documents",
-    "newDocument": "New shared document"
+    "newDocument": "New shared document",
+    "allDocuments": "Chat documents"
   },
   "roster": {
     "title": "Roster",
@@ -1030,7 +1045,8 @@
     "approvedToast": "Approved",
     "changesToast": "Changes requested",
     "reviewHint": "You can still request changes after approving.",
-    "descriptionTooLong": "The description is too long (max {max} characters; each @ mention counts too)"
+    "descriptionTooLong": "The description is too long (max {max} characters; each @ mention counts too)",
+    "nobodyInChat": "This chat has no approved members yet, so nobody would get it. Add members first, or untick this and pick people."
   },
   "docs": {
     "title": "Documents",

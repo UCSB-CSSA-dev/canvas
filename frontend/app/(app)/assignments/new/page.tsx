@@ -134,6 +134,7 @@ function TaskForm({
   const startMs = fromLocalInput(start);
   const endMs = fromLocalInput(end);
   const descriptionTooLong = description.length > LIMITS.taskDescription;
+  const nobodyInChat = everyone && audience !== undefined && people.length === 0;
   const invalidEnd = kind === "event" && startMs !== undefined && endMs !== undefined && endMs <= startMs;
   const canSave =
     !busy &&
@@ -361,6 +362,7 @@ function TaskForm({
                   <Checkbox checked={everyone} onCheckedChange={(v) => setEveryone(v === true)} />
                   {t("everyoneInChat", { count: people.length })}
                 </label>
+                {nobodyInChat ? <p className="text-xs text-destructive">{t("nobodyInChat")}</p> : null}
                 {!everyone ? (
                   <div className="flex flex-wrap gap-1.5">
                     {picked.map((p) => (
@@ -451,7 +453,7 @@ function TaskForm({
                 <Button type="button" variant="outline" disabled={!canSave} onClick={() => void submit(false)}>
                   {t("saveDraft")}
                 </Button>
-                <Button type="button" disabled={!canSave} onClick={() => void submit(true)}>
+                <Button type="button" disabled={!canSave || nobodyInChat} onClick={() => void submit(true)}>
                   {t("publish")}
                 </Button>
               </>

@@ -64,7 +64,21 @@
     "QUOTA_EXCEEDED": "空间容量已满，请删除一些文件或联系主席团提高容量。",
     "FILE_TYPE_BLOCKED": "出于安全考虑，不能上传这种类型的文件。",
     "DRIVE_NOT_CONFIGURED": "大文件需要存到 Google Drive，但还没有连接 Apps Script，请联系主席团。",
-    "DRIVE_FAILED": "上传到 Google Drive 失败，请稍后再试。"
+    "DRIVE_FAILED": "上传到 Google Drive 失败，请稍后再试。",
+    "invalid": {
+      "title": "请填写标题（最多 120 个字符）。",
+      "description": "说明太长了。",
+      "location": "地点太长了。",
+      "assignees": "没有可以分配的人：这个聊天里还没有已通过审批的成员，或者选中的人已不在聊天里。请先添加成员，或改为指定具体的人。",
+      "departmentId": "不能把文件存到这个空间，请换一个文件空间。",
+      "startAt": "请填写活动开始时间。",
+      "endAt": "结束时间必须晚于开始时间。",
+      "eventId": "所属活动已不存在或已关闭，请重新选择。",
+      "fileIds": "有附件已被删除或不在这个任务的文件夹里，请移除后重试。",
+      "status": "任务状态已变化，请刷新页面后重试。",
+      "name": "名称不能为空。",
+      "link": "链接需要以 http:// 或 https:// 开头。"
+    }
   },
   "signIn": {
     "title": "登录 CSSA Hub",
@@ -277,7 +291,8 @@
     "newTask": "发布任务或活动",
     "saveToFiles": "保存到文件",
     "documents": "文档",
-    "newDocument": "新建协作文档"
+    "newDocument": "新建协作文档",
+    "allDocuments": "聊天文档"
   },
   "roster": {
     "title": "组织架构",
@@ -1030,7 +1045,8 @@
     "approvedToast": "已通过",
     "changesToast": "已要求修改",
     "reviewHint": "已通过的提交也可以再次要求修改。",
-    "descriptionTooLong": "说明太长了（最多 {max} 个字符，每个 @ 也占用字符）"
+    "descriptionTooLong": "说明太长了（最多 {max} 个字符，每个 @ 也占用字符）",
+    "nobodyInChat": "这个聊天里还没有已通过审批的成员，发布后没有人会收到。请先添加成员，或取消勾选并指定具体的人。"
   },
   "docs": {
     "title": "文档",

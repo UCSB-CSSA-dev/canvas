@@ -5,6 +5,7 @@ import {
   ClipboardListIcon,
   EyeIcon,
   FileIcon,
+  FilePenLineIcon,
   FolderIcon,
   LoaderIcon,
   LockIcon,
@@ -30,6 +31,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useViewer } from "@/components/auth/account-state";
+import { chatHasDocs, NewChatDocumentDialog } from "@/components/docs/chat-documents";
 import { FilePickerDialog } from "@/components/files/file-dialogs";
 import { PersonAvatar } from "@/components/people/person-avatar";
 import { matchesPerson } from "@/components/people/use-people";
@@ -133,6 +135,7 @@ function Editor({ name }: { name: string }) {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [sharedFiles, setSharedFiles] = useState<{ _id: Id<"files">; name: string }[]>([]);
   const [pickingFiles, setPickingFiles] = useState(false);
+  const [newDoc, setNewDoc] = useState(false);
   const [announce, setAnnounce] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -470,8 +473,17 @@ function Editor({ name }: { name: string }) {
                   <FolderIcon />
                   {t("attachFromFiles")}
                 </DropdownMenuItem>
+                {chatHasDocs(channel.type) ? (
+                  <DropdownMenuItem onSelect={() => setNewDoc(true)}>
+                    <FilePenLineIcon />
+                    {t("newDocument")}
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
+            {chatHasDocs(channel.type) ? (
+              <NewChatDocumentDialog channelId={channel._id} open={newDoc} onClose={() => setNewDoc(false)} />
+            ) : null}
             <FilePickerDialog
               open={pickingFiles}
               max={LIMITS.sharedFilesPerMessage - sharedFiles.length}

@@ -8,6 +8,7 @@ import {
   BellOffIcon,
   ClockIcon,
   EyeIcon,
+  FilePenLineIcon,
   InfoIcon,
   ListChecksIcon,
   MoreVerticalIcon,
@@ -18,6 +19,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { useViewer } from "@/components/auth/account-state";
+import { chatHasDocs } from "@/components/docs/chat-documents";
 import { PageHeader } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +44,7 @@ export function ChatHeader({
   onRetention,
   onGroupInfo,
   onEndedApps,
+  onDocuments,
   extra,
 }: {
   title: string;
@@ -50,6 +53,7 @@ export function ChatHeader({
   onRetention: () => void;
   onGroupInfo: () => void;
   onEndedApps: () => void;
+  onDocuments: () => void;
   extra?: ReactNode;
 }) {
   const t = useTranslations("chat");
@@ -104,6 +108,12 @@ export function ChatHeader({
             <DropdownMenuItem onSelect={onRetention}>
               <ClockIcon />
               {t("retentionMenu", { days: channel.retentionDays })}
+            </DropdownMenuItem>
+          ) : null}
+          {chatHasDocs(channel.type) ? (
+            <DropdownMenuItem onSelect={onDocuments}>
+              <FilePenLineIcon />
+              {t("documents")}
             </DropdownMenuItem>
           ) : null}
           {channel.type !== "dm" ? (

@@ -275,7 +275,9 @@
     "attachUpload": "Upload from device (expires in {days} days)",
     "attachFromFiles": "Choose from Files",
     "newTask": "Post a task or event",
-    "saveToFiles": "Save to Files"
+    "saveToFiles": "Save to Files",
+    "documents": "Documents",
+    "newDocument": "New shared document"
   },
   "roster": {
     "title": "Roster",
@@ -519,7 +521,9 @@
     "submissionReceived": "{actor} submitted \"{title}\"",
     "submissionApproved": "{actor} approved your \"{title}\"",
     "submissionChanges": "{actor} requested changes on \"{title}\"",
-    "assignmentComment": "{actor} commented on \"{title}\""
+    "assignmentComment": "{actor} commented on \"{title}\"",
+    "docMention": "{actor} mentioned you in \"{title}\"",
+    "taskMention": "{actor} mentioned you in the {kind} \"{title}\""
   },
   "groups": {
     "status": {
@@ -1025,7 +1029,8 @@
     "approve": "Approve",
     "approvedToast": "Approved",
     "changesToast": "Changes requested",
-    "reviewHint": "You can still request changes after approving."
+    "reviewHint": "You can still request changes after approving.",
+    "descriptionTooLong": "The description is too long (max {max} characters; each @ mention counts too)"
   },
   "docs": {
     "title": "Documents",
@@ -1036,7 +1041,6 @@
     "empty": "No documents yet. Start one and write it together.",
     "edited": "Edited by {name} {time}",
     "notFound": "This document doesn't exist, or you can't see it.",
-    "backToTasks": "Back to tasks",
     "backToTask": "Back to task",
     "more": "More",
     "rename": "Rename",
@@ -1069,6 +1073,21 @@
     "taskList": "Checklist",
     "quote": "Quote",
     "codeBlock": "Code block",
-    "divider": "Divider"
+    "divider": "Divider",
+    "document": "Document",
+    "mention": "Mention someone (@)",
+    "backHome": "Back to home",
+    "backToEvent": "Back to event",
+    "backToChat": "Back to chat",
+    "backToFolder": "Back to folder",
+    "trashBody": "The document moves to the trash and is deleted for good after {days} days.",
+    "trashed": "Document moved to the trash",
+    "newInFolderBody": "Saved in this folder. Anyone who can upload here can edit it with you. Markdown works.",
+    "newInChatBody": "Posts a document card in the chat. Everyone in the chat can edit it together. Markdown works.",
+    "chatDocsTitle": "Chat documents",
+    "chatDocsBody": "Every shared document started in this chat. They stay here even after old messages expire.",
+    "chatCardLabel": "Shared document",
+    "editedAt": "Edited {time}",
+    "cardGone": "Document deleted"
   }
 }

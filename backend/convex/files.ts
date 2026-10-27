@@ -55,6 +55,8 @@ export type FileView = {
   isImage: boolean;
   /** Kept in Google Drive: anyone with the link can open it. */
   drive: boolean;
+  /** A collaborative document: opens in the editor instead of downloading. */
+  documentId: Id<"documents"> | null;
   /** Direct download. */
   url: string | null;
   /** For the preview dialog (an iframe for Drive files). */
@@ -121,6 +123,7 @@ async function fileViews(
       contentType: file.contentType,
       isImage,
       drive: drive !== undefined,
+      documentId: file.documentId ?? null,
       url,
       previewUrl: drive ? `https://drive.google.com/file/d/${drive}/preview` : url,
       openUrl: drive ? `https://drive.google.com/file/d/${drive}/view` : url,
@@ -529,6 +532,7 @@ export const rename = mutation({
       excludeId: file._id,
     });
     await ctx.db.patch("files", file._id, { name });
+    if (file.documentId) await ctx.db.patch("documents", file.documentId, { title: name });
   },
 });
 
@@ -552,23 +556,28 @@ export const move = mutation({
   },
 });
 
+/** Moves a file to the trash; deleting someone else's file is audit logged. Rights are checked by the caller. */
+export async function trashFile(ctx: MutationCtx, viewer: ViewerContext, file: Doc<"files">) {
+  if (file.deletedAt) return;
+  await ctx.db.patch("files", file._id, { deletedAt: Date.now(), deletedBy: viewer.user._id });
+  if (file.uploadedBy !== viewer.user._id) {
+    await logAudit(ctx, {
+      actorId: viewer.user._id,
+      action: "file.moderate_delete",
+      targetType: "file",
+      targetId: file._id,
+      subjectUserId: file.uploadedBy,
+      metadata: { name: file.name },
+    });
+  }
+}
+
 export const remove = mutation({
   args: { fileId: v.id("files") },
   handler: async (ctx, args) => {
     const viewer = await requireApproved(ctx);
     const { file } = await requireEditableFile(ctx, viewer, args.fileId);
-    if (file.deletedAt) return;
-    await ctx.db.patch("files", file._id, { deletedAt: Date.now(), deletedBy: viewer.user._id });
-    if (file.uploadedBy !== viewer.user._id) {
-      await logAudit(ctx, {
-        actorId: viewer.user._id,
-        action: "file.moderate_delete",
-        targetType: "file",
-        targetId: file._id,
-        subjectUserId: file.uploadedBy,
-        metadata: { name: file.name },
-      });
-    }
+    await trashFile(ctx, viewer, file);
   },
 });
 

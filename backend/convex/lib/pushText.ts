@@ -46,6 +46,8 @@ const TEXT = {
     submissionApproved: "{actor} 通过了你的「{title}」",
     submissionChanges: "{actor} 请你修改「{title}」",
     assignmentComment: "{actor} 评论了「{title}」",
+    docMention: "{actor} 在文档「{title}」中提到了你",
+    taskMention: "{actor} 在{kind}「{title}」中提到了你",
     task: "任务",
     event: "活动",
     signup: "接龙",
@@ -87,6 +89,8 @@ const TEXT = {
     submissionApproved: '{actor} approved your "{title}"',
     submissionChanges: '{actor} requested changes on "{title}"',
     assignmentComment: '{actor} commented on "{title}"',
+    docMention: '{actor} mentioned you in "{title}"',
+    taskMention: '{actor} mentioned you in the {kind} "{title}"',
     task: "task",
     event: "event",
     signup: "Sign-up",
@@ -195,5 +199,9 @@ export function pushText(input: PushInput, locale: PushLocale, lookup: PushLooku
       };
     case "assignment_comment":
       return { title: t("assignmentComment", { actor: person("actorId"), title }), body: preview };
+    case "doc_mention":
+      return { title: t("docMention", { actor: person("actorId"), title }) };
+    case "task_mention":
+      return { title: t("taskMention", { actor: person("actorId"), kind: taskKind(), title }) };
   }
 }

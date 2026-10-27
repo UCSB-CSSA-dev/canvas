@@ -27,6 +27,8 @@ Every notification below is in-app and pushed. Email is only the [daily digest](
 | Submission received | Creator | `submission_received` |
 | Submission approved or changes requested | Assignee | `submission_reviewed` |
 | New comment on a submission | The other side (assignee or reviewers) | `assignment_comment` |
+| @mentioned in a document | Newly mentioned people who can open it | `doc_mention` |
+| @mentioned in a task or event description | Newly mentioned people in the chat (not those just assigned) | `task_mention` |
 
 Account requests, approvals and invites are not emailed. Approvers see the roster badge, and applicants see the result when they next sign in.
 

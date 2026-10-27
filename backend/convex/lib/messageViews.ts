@@ -64,6 +64,8 @@ export type SharedFileView = {
   spaceNameEn: string;
   deleted: boolean;
   canView: boolean;
+  /** A document created in Files: the card opens the editor. */
+  documentId: Id<"documents"> | null;
 };
 
 export type TaskCardView = {
@@ -83,10 +85,12 @@ export type TaskCardView = {
   ended: boolean;
 };
 
+export type DocCardView = { _id: Id<"documents">; title: string; updatedAt: number };
+
 export type MessageView = {
   _id: Id<"messages">;
   _creationTime: number;
-  kind: "user" | "system" | "forward" | "task";
+  kind: "user" | "system" | "forward" | "task" | "doc";
   authorId: Id<"users">;
   body: string;
   state: MessageState;
@@ -101,6 +105,8 @@ export type MessageView = {
   files: SharedFileView[];
   /** kind "task": the live card; null when the task was deleted. */
   task?: TaskCardView | null;
+  /** kind "doc": the chat document; null when it was deleted. */
+  doc?: DocCardView | null;
   /** Every user referenced by this message (author, mentions, reactions, system params, forwards). */
   people: UserSummary[];
   /** Departments referenced by system params. */
@@ -176,6 +182,7 @@ async function sharedFileViews(
         spaceNameEn: "",
         deleted: true,
         canView: false,
+        documentId: null,
       });
       continue;
     }
@@ -190,6 +197,7 @@ async function sharedFileViews(
       spaceNameEn: department?.nameEn ?? "Public",
       deleted: file.deletedAt !== undefined,
       canView: department?.kind === "presidium" ? await isAdmin() : true,
+      documentId: file.documentId ?? null,
     });
   }
   return views;
@@ -221,6 +229,11 @@ export async function taskCard(
     myStatus: rows.find((r) => r.assigneeId === viewerId)?.status ?? null,
     ended: assignment.kind === "event" && eventEnd(assignment) <= Date.now(),
   };
+}
+
+async function docCard(ctx: QueryCtx, documentId: Id<"documents">): Promise<DocCardView | null> {
+  const doc = await ctx.db.get("documents", documentId);
+  return doc ? { _id: doc._id, title: doc.title, updatedAt: doc.updatedAt } : null;
 }
 
 export async function toMessageViews(
@@ -323,6 +336,7 @@ export async function toMessageViews(
       forward,
       files: state === "normal" ? await sharedFileViews(ctx, message.fileIds ?? [], isAdmin) : [],
       task: message.assignmentId ? await taskCard(ctx, message.assignmentId, viewerId) : undefined,
+      doc: message.documentId ? await docCard(ctx, message.documentId) : undefined,
       people: [...summaries.values()],
       departments,
     });

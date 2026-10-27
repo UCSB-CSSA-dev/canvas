@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { FileTextIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -19,15 +20,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { api, LIMITS, type Id } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
+import { docHref } from "@/lib/links";
 import type { Locale } from "@/lib/locale-store";
 import { displayName } from "@/lib/names";
+
+type DocumentRow = NonNullable<FunctionReturnType<typeof api.documents.listForTask>>["documents"][number];
 
 /** The task's collaborative documents, with "New document" for people who can edit them. */
 export function TaskDocuments({ assignmentId }: { assignmentId: Id<"assignments"> }) {
   const t = useTranslations("docs");
-  const locale = useLocale() as Locale;
-  const format = useFormatter();
   const data = useQuery(api.documents.listForTask, { assignmentId });
+  const create = useMutation(api.documents.create);
   const [creating, setCreating] = useState(false);
   if (!data || (data.documents.length === 0 && !data.canCreate)) return null;
 
@@ -42,51 +45,68 @@ export function TaskDocuments({ assignmentId }: { assignmentId: Id<"assignments"
           </Button>
         ) : null}
       </CardHeader>
-      <CardContent className="flex flex-col gap-1.5">
-        {data.documents.length === 0 ? <p className="text-sm text-muted-foreground">{t("empty")}</p> : null}
-        {data.documents.map((doc) => (
-          <Link
-            key={doc._id}
-            href={`/assignments/doc/?d=${doc._id}`}
-            className="flex items-center gap-3 rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm hover:bg-secondary"
-          >
-            <FileTextIcon className="size-4 shrink-0 text-primary" />
-            <span className="min-w-0 flex-1 truncate">{doc.title}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {t("edited", {
-                name: doc.updatedBy ? displayName(doc.updatedBy, locale) : "?",
-                time: format.relativeTime(doc.updatedAt),
-              })}
-            </span>
-          </Link>
-        ))}
+      <CardContent>
+        <DocumentRows documents={data.documents} />
       </CardContent>
-      <NewDocumentDialog assignmentId={assignmentId} open={creating} onClose={() => setCreating(false)} />
+      <NewDocumentDialog
+        open={creating}
+        description={t("newBody")}
+        onClose={() => setCreating(false)}
+        onCreate={(title) => create({ assignmentId, title })}
+      />
     </Card>
   );
 }
 
-function NewDocumentDialog({
-  assignmentId,
+export function DocumentRows({ documents }: { documents: DocumentRow[] }) {
+  const t = useTranslations("docs");
+  const locale = useLocale() as Locale;
+  const format = useFormatter();
+  if (documents.length === 0) return <p className="text-sm text-muted-foreground">{t("empty")}</p>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {documents.map((doc) => (
+        <Link
+          key={doc._id}
+          href={docHref(doc._id)}
+          className="flex items-center gap-3 rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm hover:bg-secondary"
+        >
+          <FileTextIcon className="size-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1 truncate">{doc.title}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {t("edited", {
+              name: doc.updatedBy ? displayName(doc.updatedBy, locale) : "?",
+              time: format.relativeTime(doc.updatedAt),
+            })}
+          </span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/** Asks for a title, creates the document and opens it. */
+export function NewDocumentDialog({
   open,
+  description,
   onClose,
+  onCreate,
 }: {
-  assignmentId: Id<"assignments">;
   open: boolean;
+  description: string;
   onClose: () => void;
+  onCreate: (title: string) => Promise<Id<"documents">>;
 }) {
   const t = useTranslations("docs");
   const router = useRouter();
   const showError = useErrorToast();
-  const create = useMutation(api.documents.create);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!title.trim() || busy) return;
     setBusy(true);
     try {
-      const id = await create({ assignmentId, title });
-      router.push(`/assignments/doc/?d=${id}`);
+      router.push(docHref(await onCreate(title)));
     } catch (error) {
       showError(error);
       setBusy(false);
@@ -97,7 +117,7 @@ function NewDocumentDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("new")}</DialogTitle>
-          <DialogDescription>{t("newBody")}</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <Input
           autoFocus

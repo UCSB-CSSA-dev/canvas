@@ -5,13 +5,17 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
   ArrowLeftIcon,
+  CalendarDaysIcon,
+  ClipboardListIcon,
   DownloadIcon,
   EyeIcon,
-  FileTextIcon,
+  FolderIcon,
+  MessageSquareIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PrinterIcon,
   Trash2Icon,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -22,6 +26,7 @@ import { toast } from "sonner";
 import { DocEditor } from "@/components/docs/doc-editor";
 import { MarkdownView } from "@/components/docs/markdown-view";
 import { PageHeader } from "@/components/layout/app-shell";
+import { useTaskChatName } from "@/components/tasks/task-format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,8 +48,9 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, LIMITS } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
+import { filesHref } from "@/lib/links";
 import type { Locale } from "@/lib/locale-store";
-import { displayName } from "@/lib/names";
+import { displayName, localized } from "@/lib/names";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.documents.get>>;
 
@@ -68,7 +74,7 @@ function DocumentView() {
         <div className="m-auto flex flex-col items-center gap-3 p-6 text-center">
           <p className="text-sm text-muted-foreground">{t("notFound")}</p>
           <Button asChild size="sm" variant="secondary">
-            <Link href="/assignments/">{t("backToTasks")}</Link>
+            <Link href="/">{t("backHome")}</Link>
           </Button>
         </div>
       </>
@@ -88,15 +94,44 @@ function DocumentView() {
   return <DocumentDetail doc={doc} />;
 }
 
+/** Where the document lives: its task, chat or folder, with a link back. */
+function useParentLink(doc: Doc): { href: string; label: string; back: string; icon: LucideIcon } {
+  const t = useTranslations("docs");
+  const locale = useLocale() as Locale;
+  const chatName = useTaskChatName();
+  const parent = doc.parent;
+  if (parent.kind === "task") {
+    return {
+      href: `/assignments/view/?a=${parent._id}`,
+      label: parent.title,
+      back: parent.taskKind === "event" ? t("backToEvent") : t("backToTask"),
+      icon: parent.taskKind === "event" ? CalendarDaysIcon : ClipboardListIcon,
+    };
+  }
+  if (parent.kind === "chat") {
+    return { href: `/chat/?c=${parent.chat._id}`, label: chatName(parent.chat), back: t("backToChat"), icon: MessageSquareIcon };
+  }
+  return {
+    href: filesHref({ s: parent.spaceKey, f: parent.folderId }),
+    label: localized(parent.spaceNameZh, parent.spaceNameEn, locale),
+    back: t("backToFolder"),
+    icon: FolderIcon,
+  };
+}
+
 function DocumentDetail({ doc }: { doc: Doc }) {
   const t = useTranslations("docs");
   const locale = useLocale() as Locale;
   const format = useFormatter();
+  const parent = useParentLink(doc);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [printing, setPrinting] = useState<string | null>(null);
-  const taskHref = `/assignments/view/?a=${doc.assignment._id}`;
+  const ParentIcon = parent.icon;
+  const closedTask = doc.parent.kind === "task" && doc.parent.status === "closed";
+  // Files documents are renamed like files: by their creator or the space's managers.
+  const canRename = doc.parent.kind === "file" ? doc.canDelete : doc.canEdit;
 
   const markdown = () => editor?.getMarkdown() ?? "";
 
@@ -128,9 +163,9 @@ function DocumentDetail({ doc }: { doc: Doc }) {
     <>
       <PageHeader title={doc.title}>
         <Button asChild size="sm" variant="ghost" className="hidden sm:inline-flex">
-          <Link href={taskHref}>
+          <Link href={parent.href}>
             <ArrowLeftIcon />
-            {t("backToTask")}
+            {parent.back}
           </Link>
         </Button>
         <DropdownMenu>
@@ -140,7 +175,7 @@ function DocumentDetail({ doc }: { doc: Doc }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {doc.canEdit ? (
+            {canRename ? (
               <DropdownMenuItem onSelect={() => setRenaming(true)}>
                 <PencilIcon />
                 {t("rename")}
@@ -169,9 +204,9 @@ function DocumentDetail({ doc }: { doc: Doc }) {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-3xl flex-col gap-4 p-4 sm:px-8">
           <div className="flex flex-col gap-1.5">
-            <Link href={taskHref} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
-              <FileTextIcon className="size-3.5" />
-              {doc.assignment.title}
+            <Link href={parent.href} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary">
+              <ParentIcon className="size-3.5" />
+              {parent.label}
             </Link>
             <h2 className="text-2xl font-bold">{doc.title}</h2>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -186,16 +221,16 @@ function DocumentDetail({ doc }: { doc: Doc }) {
               ) : (
                 <Badge variant="secondary" className="gap-1">
                   <EyeIcon className="size-3" />
-                  {doc.assignment.status === "closed" ? t("closedReadOnly") : t("readOnly")}
+                  {closedTask ? t("closedReadOnly") : t("readOnly")}
                 </Badge>
               )}
             </div>
           </div>
-          <DocEditor documentId={doc._id} editable={doc.canEdit} onEditor={setEditor} />
+          <DocEditor documentId={doc._id} editable={doc.canEdit} mentionable={doc.mentionable} onEditor={setEditor} />
         </div>
       </div>
       <RenameDialog key={String(renaming)} doc={doc} open={renaming} onClose={() => setRenaming(false)} />
-      <DeleteDialog doc={doc} open={deleting} onClose={() => setDeleting(false)} />
+      <DeleteDialog doc={doc} parentHref={parent.href} open={deleting} onClose={() => setDeleting(false)} />
       {printing !== null
         ? createPortal(
             <div className="print-root">
@@ -244,17 +279,28 @@ function RenameDialog({ doc, open, onClose }: { doc: Doc; open: boolean; onClose
   );
 }
 
-function DeleteDialog({ doc, open, onClose }: { doc: Doc; open: boolean; onClose: () => void }) {
+function DeleteDialog({
+  doc,
+  parentHref,
+  open,
+  onClose,
+}: {
+  doc: Doc;
+  parentHref: string;
+  open: boolean;
+  onClose: () => void;
+}) {
   const t = useTranslations("docs");
   const router = useRouter();
   const showError = useErrorToast();
   const remove = useMutation(api.documents.remove);
+  const inFiles = doc.parent.kind === "file";
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("deleteTitle", { title: doc.title })}</DialogTitle>
-          <DialogDescription>{t("deleteBody")}</DialogDescription>
+          <DialogDescription>{inFiles ? t("trashBody", { days: LIMITS.trashDays }) : t("deleteBody")}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -264,9 +310,9 @@ function DeleteDialog({ doc, open, onClose }: { doc: Doc; open: boolean; onClose
             variant="destructive"
             onClick={() =>
               remove({ documentId: doc._id })
-                .then(() => {
-                  toast.success(t("deleted"));
-                  router.replace(`/assignments/view/?a=${doc.assignment._id}`);
+                .then(({ trashed }) => {
+                  toast.success(trashed ? t("trashed") : t("deleted"));
+                  router.replace(parentHref);
                 })
                 .catch(showError)
             }

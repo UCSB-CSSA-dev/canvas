@@ -80,6 +80,14 @@ The Convex free plan has a hard cap of 1 GB of stored files, shared by Files, ta
 - Video and audio: native players.
 - Everything else: download only.
 
+## Documents
+
+"新建文档 / New document" (for anyone who can upload in the folder) creates a collaborative markdown document there, edited in the same live editor as task documents (see [assignments.md](assignments.md#documents)), at `/docs/?d=<id>`.
+
+- It is a `files` row with `documentId` (type `text/markdown`, size 0), so it shows in the folder, search, move, trash and restore like any file, and doesn't use quota. Opening it goes to the editor instead of the preview; there is no download (export from the editor instead).
+- Anyone who can upload in the space (or the author, inside a task folder) can edit it. Renaming and deleting follow the file rules: the author or a manager. Deleting moves it to the trash; purging deletes the content.
+- @mentions suggest everyone who can see the space (主席团 members for 主席团).
+
 ## Folder operations
 
 - Create, rename, move (within the same space only), delete.
@@ -128,6 +136,7 @@ Search file names (case-insensitive substring) across the spaces the viewer can 
 | `files.setQuota` | mutation | 主席团 only |
 | `files.folderTree` | query | Folders of a space, for the move and save pickers |
 | `files.purge` | mutation | Managers: delete a trashed file or folder for good |
+| `documents.createInFolder` | mutation | New document in a folder (see [Documents](#documents)) |
 | `internal.files.purgeTrash` | internal mutation | Daily cron: deletes trash older than 30 days |
 
 ## Acceptance criteria

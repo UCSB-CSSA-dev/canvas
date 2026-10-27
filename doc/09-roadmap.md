@@ -504,6 +504,7 @@ Decisions for this stage (2026-10-22):
 - [x] Review: approve, request changes, comment thread
 - [x] Events: time, place, helpers, prep tasks
 - [x] Collaborative markdown documents on tasks and events (live editing, markdown shortcuts, .md and PDF export)
+- [x] Documents in Files folders and in department, group and DM chats; `@` mentions in documents and task descriptions (`doc_mention`, `task_mention`)
 - [x] Notifications and pushes: new, updated, due soon, overdue, event soon, submission received, reviewed, comment
 - [x] 任务 tab enabled in the sidebar and bottom bar
 
@@ -547,7 +548,6 @@ Pick based on feedback:
 - [ ] Global search across messages, files, and assignments
 - [ ] Yearly handover flow in admin
 - [ ] Audit log CSV export
-- [ ] In-app documents (simple rich text pages) if decided in [open questions](10-open-questions.md)
 - [ ] Calendar view of task due dates and events
 - [ ] Playwright end-to-end tests
 - [ ] Performance pass (message list virtualization, image thumbnails)

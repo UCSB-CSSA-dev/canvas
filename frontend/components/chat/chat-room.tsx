@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AppBar } from "@/components/apps/app-bar";
 import { AppPanel, EndedAppsDialog } from "@/components/apps/app-panel";
+import { ChatDocumentsDialog, chatHasDocs } from "@/components/docs/chat-documents";
 import { GroupInfoSheet } from "@/components/groups/group-info-sheet";
 import { api, LIMITS, type Id } from "@/lib/api";
 import { AnnouncementBar } from "./announcement-bar";
@@ -43,6 +44,7 @@ export function ChatRoom({
   const [retentionOpen, setRetentionOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [endedOpen, setEndedOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
 
   const oversight = channel.access.via === "oversight";
   useEffect(() => {
@@ -105,6 +107,7 @@ export function ChatRoom({
         onRetention={() => setRetentionOpen(true)}
         onGroupInfo={() => setGroupOpen(true)}
         onEndedApps={() => setEndedOpen(true)}
+        onDocuments={() => setDocsOpen(true)}
       />
       <AnnouncementBar />
       <AppBar onOpen={setAppId} />
@@ -126,6 +129,9 @@ export function ChatRoom({
       ) : null}
       {channel.type !== "dm" ? (
         <EndedAppsDialog channelId={channel._id} open={endedOpen} onOpenChange={setEndedOpen} onOpenApp={setAppId} />
+      ) : null}
+      {chatHasDocs(channel.type) ? (
+        <ChatDocumentsDialog channelId={channel._id} open={docsOpen} onOpenChange={setDocsOpen} />
       ) : null}
       <AppPanel appId={appId} onClose={() => setAppId(null)} />
     </ChatContext.Provider>

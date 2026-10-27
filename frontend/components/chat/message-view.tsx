@@ -48,6 +48,7 @@ import { useChat } from "./chat-context";
 import { ForwardCard } from "./forward-card";
 import { Markdown, usePlainPreview } from "./markdown";
 import { SystemMessage } from "./system-message";
+import { DocCardView } from "@/components/docs/chat-documents";
 import { SharedFileList, TaskCardView } from "./task-card";
 import { personById, type Message } from "./types";
 
@@ -209,7 +210,8 @@ function MessageRow({ message, grouped, highlighted }: { message: Message; group
   const { selecting, selected, toggleSelected } = useChat();
   const author = personById(message.people, message.authorId);
   const time = format.dateTime(message._creationTime, { hour: "numeric", minute: "2-digit" });
-  const selectable = message.state === "normal" && message.kind !== "task";
+  const card = message.kind === "task" || message.kind === "doc";
+  const selectable = message.state === "normal" && !card;
   const isSelected = selected.has(message._id);
 
   return (
@@ -281,6 +283,7 @@ function MessageContent({ message }: { message: Message }) {
     <>
       {message.replyTo ? <ReplyQuote message={message} /> : null}
       {message.kind === "task" ? <TaskCardView task={message.task ?? null} /> : null}
+      {message.kind === "doc" ? <DocCardView doc={message.doc ?? null} /> : null}
       {message.body ? <Markdown body={message.body} people={message.people} /> : null}
       {message.forward ? <ForwardCard forward={message.forward} people={message.people} /> : null}
       <AttachmentList attachments={message.attachments} />
@@ -410,6 +413,7 @@ function MessageActions({ message }: { message: Message }) {
   const canReply = isMember && channel.access.canPost;
   const canEdit = own && isMember && channel.access.canInteract && message.kind === "user";
   const canRecall = own && isMember && channel.access.canInteract && now - message._creationTime < LIMITS.recallWindowMs;
+  const card = message.kind === "task" || message.kind === "doc";
 
   const copy = async () => {
     const text = message.body ? preview(message.body, message.people, 100_000) : "";
@@ -444,7 +448,7 @@ function MessageActions({ message }: { message: Message }) {
               {t("recall")}
             </DropdownMenuItem>
           ) : null}
-          {isMember && message.kind !== "task" ? (
+          {isMember && !card ? (
             <DropdownMenuItem onSelect={() => forward([message._id])}>
               <ForwardIcon />
               {t("forward")}
@@ -454,7 +458,7 @@ function MessageActions({ message }: { message: Message }) {
             <CopyIcon />
             {t("copy")}
           </DropdownMenuItem>
-          {message.kind !== "task" ? (
+          {!card ? (
             <DropdownMenuItem onSelect={() => startSelecting(message)}>
               <ListChecksIcon />
               {t("select")}

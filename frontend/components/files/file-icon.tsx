@@ -3,6 +3,7 @@ import {
   FileAudioIcon,
   FileIcon,
   FileImageIcon,
+  FilePenLineIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   FileVideoIcon,
@@ -10,7 +11,19 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function FileTypeIcon({ contentType, name, className }: { contentType: string; name: string; className?: string }) {
+export function FileTypeIcon({
+  contentType,
+  name,
+  document,
+  className,
+}: {
+  contentType: string;
+  name: string;
+  /** A collaborative document created in the Hub. */
+  document?: boolean;
+  className?: string;
+}) {
+  if (document) return <FilePenLineIcon className={cn("size-5 shrink-0 text-primary", className)} />;
   const ext = name.split(".").pop()?.toLowerCase() ?? "";
   const Icon = contentType.startsWith("image/")
     ? FileImageIcon

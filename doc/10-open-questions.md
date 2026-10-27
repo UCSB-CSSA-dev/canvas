@@ -39,11 +39,6 @@ What happens to messages, files, and assignments when a school year ends?
 
 ## Features
 
-### Q9. In-app documents (Google Docs style)
-
-- **Default:** uploads only. No in-app editing in v1. Revisit in Stage 5 with a simple single-editor rich text page (TipTap), not real-time co-editing.
-- Alternative: build real-time collaborative docs (much larger scope), or link out to Google Docs.
-
 ### Q10. Department list
 
 - **Default:** seed 主席团, 活动部, 国际部, 宣传部. Admins add the rest from the roster page.
@@ -116,4 +111,5 @@ Record decisions here as `YYYY-MM-DD - Qn - decision - where documented`.
 - 2026-10-22 - Q13 - events (e.g. 春晚) are a kind of task with a time, place, helpers and prep tasks; no RSVP - [assignments.md](features/assignments.md#tasks-and-events)
 - 2026-10-22 - Q11 - a dedicated free Gmail account; the only email is a daily digest at 10:00 AM Pacific to everyone with open tasks or upcoming events, no opt-out, optional alternative address - [notifications-and-email.md](features/notifications-and-email.md#daily-digest)
 - 2026-10-26 - Large files - files over 10 MB (up to 500 MB), or uploads to a full space, go to the CSSA Google Drive through the Apps Script, viewable by anyone with the link - [files.md](features/files.md#google-drive)
-- 2026-10-26 - Documents - tasks and events can have collaborative markdown documents (live editing, rendered as you type, .md and PDF export); nothing else is created in the Hub, other files are uploaded - [assignments.md](features/assignments.md#documents)
+- 2026-10-26 - Q9 - tasks and events can have collaborative markdown documents (live editing, rendered as you type, .md and PDF export) - [assignments.md](features/assignments.md#documents)
+- 2026-10-26 - Documents everywhere - documents can also be created in a Files folder and in department, group and DM chats (not 全体, by anyone who can post); `@` mentions work in documents and task descriptions and notify the person - [files.md](features/files.md#documents), [chat.md](features/chat.md#shared-documents)

@@ -269,7 +269,7 @@ export const edit = mutation({
   handler: async (ctx, args) => {
     const viewer = await requireApproved(ctx);
     const { message, channel, access } = await requireOwnLiveMessage(ctx, viewer, args.messageId);
-    if (message.kind === "forward" || message.kind === "task") throw appError("FORBIDDEN");
+    if (message.kind === "forward" || message.kind === "task" || message.kind === "doc") throw appError("FORBIDDEN");
     requirePost(access);
     const hasAttachments =
       (message.fileIds?.length ?? 0) > 0 ||
@@ -441,7 +441,8 @@ export const forward = mutation({
     const messages: Doc<"messages">[] = [];
     for (const id of messageIds) {
       const message = await ctx.db.get("messages", id);
-      if (!message || message.channelId !== source._id || !isLiveUserContent(message) || message.kind === "task") {
+      const card = message?.kind === "task" || message?.kind === "doc";
+      if (!message || message.channelId !== source._id || !isLiveUserContent(message) || card) {
         throw appError("INVALID", "messageIds");
       }
       messages.push(message);

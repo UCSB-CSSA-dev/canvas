@@ -12,6 +12,7 @@ import { FileTypeIcon } from "@/components/files/file-icon";
 import { UploadPanel } from "@/components/files/upload-panel";
 import { useFileUpload } from "@/components/files/use-file-upload";
 import { PageHeader } from "@/components/layout/app-shell";
+import { MentionTextarea } from "@/components/docs/mention-textarea";
 import { PersonAvatar } from "@/components/people/person-avatar";
 import { PersonPicker } from "@/components/people/person-picker";
 import { fromLocalInput, toLocalInput, useTaskChatName } from "@/components/tasks/task-format";
@@ -22,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { api, LIMITS, type Id } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
 import { formatBytes } from "@/lib/format";
@@ -133,6 +133,7 @@ function TaskForm({
 
   const startMs = fromLocalInput(start);
   const endMs = fromLocalInput(end);
+  const descriptionTooLong = description.length > LIMITS.taskDescription;
   const invalidEnd = kind === "event" && startMs !== undefined && endMs !== undefined && endMs <= startMs;
   const canSave =
     !busy &&
@@ -141,6 +142,7 @@ function TaskForm({
     (channel !== undefined || Boolean(a)) &&
     (kind === "task" || startMs !== undefined) &&
     !invalidEnd &&
+    !descriptionTooLong &&
     (!isDraft || everyone || assigneeIds.length > 0);
 
   const fields = () => ({
@@ -276,13 +278,18 @@ function TaskForm({
             <Input value={title} maxLength={LIMITS.taskTitle} onChange={(e) => setTitle(e.target.value)} required />
           </Field>
           <Field label={t("descriptionLabel")}>
-            <Textarea
-              value={description}
-              maxLength={LIMITS.taskDescription}
-              onChange={(e) => setDescription(e.target.value)}
+            <MentionTextarea
+              defaultValue={description}
+              onChange={setDescription}
+              people={people}
+              known={existing?.people}
               rows={4}
+              aria-invalid={descriptionTooLong || undefined}
               placeholder={kind === "event" ? t("eventDescriptionPlaceholder") : t("descriptionPlaceholder")}
             />
+            {descriptionTooLong ? (
+              <p className="text-xs text-destructive">{t("descriptionTooLong", { max: LIMITS.taskDescription })}</p>
+            ) : null}
           </Field>
 
           {kind === "task" ? (

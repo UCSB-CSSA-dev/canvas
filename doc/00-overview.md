@@ -35,7 +35,6 @@ Expected scale: tens to low hundreds of active accounts. Design for clarity over
 - Native mobile apps (web only; PWA may come later, see [roadmap](09-roadmap.md)).
 - Public-facing pages, event ticketing, or payments.
 - Video or voice calls.
-- Real-time collaborative document editing like Google Docs (uploads only at first; see [open questions](10-open-questions.md)).
 - End-to-end encryption. This conflicts with the oversight requirement by design.
 - Grading or GPA-style scoring of assignments (approve / request changes only, unless decided otherwise).
 

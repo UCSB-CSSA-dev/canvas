@@ -7,4 +7,4 @@ export {
   REACTIONS,
   RETENTION_OPTIONS,
 } from "@cssa-hub/backend/convex/lib/constants";
-export { archivePhrase, mentionToken } from "@cssa-hub/backend/convex/lib/text";
+export { archivePhrase, MENTION_PATTERN, mentionToken } from "@cssa-hub/backend/convex/lib/text";

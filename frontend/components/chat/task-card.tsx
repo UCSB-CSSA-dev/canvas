@@ -7,6 +7,7 @@ import { formatBytes } from "@/lib/format";
 import { FileTypeIcon } from "@/components/files/file-icon";
 import { SubmissionBadge, TaskStatusBadge, useTaskWhen } from "@/components/tasks/task-format";
 import type { Locale } from "@/lib/locale-store";
+import { docHref, filesHref } from "@/lib/links";
 import { localized } from "@/lib/names";
 import { cn } from "@/lib/utils";
 import type { Message } from "./types";
@@ -71,6 +72,7 @@ export function SharedFileList({ files }: { files: SharedFile[] }) {
 
 function SharedFileCard({ file }: { file: SharedFile }) {
   const t = useTranslations("files");
+  const tDocs = useTranslations("docs");
   const locale = useLocale() as Locale;
   const space = localized(file.spaceNameZh, file.spaceNameEn, locale);
   const unavailable = file.deleted || !file.canView;
@@ -81,12 +83,16 @@ function SharedFileCard({ file }: { file: SharedFile }) {
       ) : !file.canView ? (
         <LockIcon className="size-5 shrink-0 text-muted-foreground" />
       ) : (
-        <FileTypeIcon contentType={file.contentType} name={file.name} />
+        <FileTypeIcon contentType={file.contentType} name={file.name} document={Boolean(file.documentId)} />
       )}
       <div className="min-w-0">
         <div className="max-w-56 truncate">{file.name}</div>
         <div className="text-xs text-muted-foreground">
-          {file.deleted ? t("sharedDeleted") : !file.canView ? t("sharedNoAccess", { space }) : `${formatBytes(file.size)} · ${space}`}
+          {file.deleted
+            ? t("sharedDeleted")
+            : !file.canView
+              ? t("sharedNoAccess", { space })
+              : `${file.documentId ? tDocs("document") : formatBytes(file.size)} · ${space}`}
         </div>
       </div>
     </>
@@ -97,7 +103,7 @@ function SharedFileCard({ file }: { file: SharedFile }) {
   );
   if (unavailable) return <div className={className}>{body}</div>;
   return (
-    <Link href={`/files/?s=${file.spaceKey}&file=${file._id}`} className={className}>
+    <Link href={file.documentId ? docHref(file.documentId) : filesHref({ s: file.spaceKey, file: file._id })} className={className}>
       {body}
     </Link>
   );

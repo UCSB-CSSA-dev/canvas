@@ -68,6 +68,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api, LIMITS, type Id } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
 import { formatBytes } from "@/lib/format";
+import { docHref } from "@/lib/links";
 import type { Locale } from "@/lib/locale-store";
 import { displayName, localized } from "@/lib/names";
 
@@ -197,7 +198,7 @@ function TaskDetail({ task, submissionId }: { task: Task; submissionId: Id<"assi
                   </>
                 ) : null}
               </dl>
-              {a.description ? <MarkdownView source={a.description} breaks className="text-sm" /> : null}
+              {a.description ? <MarkdownView source={a.description} breaks people={task.people} className="text-sm" /> : null}
               <FileList files={task.files} missing={task.missing} />
             </CardContent>
           </Card>
@@ -314,22 +315,30 @@ function ManageMenu({ task }: { task: Task }) {
 
 function FileList({ files, missing }: { files: TaskFile[]; missing: number }) {
   const t = useTranslations("tasks");
+  const tDocs = useTranslations("docs");
   if (files.length === 0 && missing === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      {files.map((f) => (
-        <a
-          key={f._id}
-          href={f.openUrl ?? undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm hover:bg-secondary"
-        >
-          <FileTypeIcon contentType={f.contentType} name={f.name} className="size-4" />
-          <span className="min-w-0 flex-1 truncate">{f.name}</span>
-          <span className="text-xs text-muted-foreground">{formatBytes(f.size)}</span>
-        </a>
-      ))}
+      {files.map((f) => {
+        const className =
+          "flex items-center gap-2 rounded-md border border-border bg-secondary/40 px-3 py-2 text-sm hover:bg-secondary";
+        const body = (
+          <>
+            <FileTypeIcon contentType={f.contentType} name={f.name} document={Boolean(f.documentId)} className="size-4" />
+            <span className="min-w-0 flex-1 truncate">{f.name}</span>
+            <span className="text-xs text-muted-foreground">{f.documentId ? tDocs("document") : formatBytes(f.size)}</span>
+          </>
+        );
+        return f.documentId ? (
+          <Link key={f._id} href={docHref(f.documentId)} className={className}>
+            {body}
+          </Link>
+        ) : (
+          <a key={f._id} href={f.openUrl ?? undefined} target="_blank" rel="noopener noreferrer" className={className}>
+            {body}
+          </a>
+        );
+      })}
       {missing > 0 ? <p className="text-xs text-muted-foreground">{t("filesMissing", { count: missing })}</p> : null}
     </div>
   );

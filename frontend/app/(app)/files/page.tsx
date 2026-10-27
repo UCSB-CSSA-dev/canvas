@@ -6,6 +6,7 @@ import {
   ChevronRightIcon,
   ClipboardListIcon,
   DownloadIcon,
+  FilePenLineIcon,
   FolderIcon,
   FolderInputIcon,
   FolderPlusIcon,
@@ -22,9 +23,10 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { Suspense, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { UsageBar } from "@/components/admin/storage-card";
+import { NewDocumentDialog } from "@/components/docs/task-documents";
 import { formatBytes } from "@/lib/format";
 import { FileTypeIcon } from "@/components/files/file-icon";
 import {
@@ -61,21 +63,12 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, LIMITS, type Id } from "@/lib/api";
 import { useErrorToast } from "@/lib/errors";
+import { docHref, filesHref } from "@/lib/links";
 import type { Locale } from "@/lib/locale-store";
 import { displayName } from "@/lib/names";
 import { cn } from "@/lib/utils";
 
 type FolderView = NonNullable<ReturnType<typeof useFolder>>["folders"][number];
-
-function filesHref(params: { s?: string; f?: string | null; trash?: boolean; file?: string }) {
-  const search = new URLSearchParams();
-  if (params.s) search.set("s", params.s);
-  if (params.f) search.set("f", params.f);
-  if (params.trash) search.set("trash", "1");
-  if (params.file) search.set("file", params.file);
-  const query = search.toString();
-  return query ? `/files/?${query}` : "/files/";
-}
 
 function useFolder(space: string, folderId: Id<"folders"> | undefined) {
   return useQuery(api.files.listFolder, { space, folderId });
@@ -114,6 +107,10 @@ function PreviewFromParam({ fileId }: { fileId: Id<"files"> }) {
   const router = useRouter();
   const params = useSearchParams();
   const data = useQuery(api.files.get, { fileId });
+  const documentId = data?.file.documentId;
+  useEffect(() => {
+    if (documentId) router.replace(docHref(documentId));
+  }, [documentId, router]);
   const close = () => {
     const next = new URLSearchParams(params.toString());
     next.delete("file");
@@ -132,6 +129,7 @@ function PreviewFromParam({ fileId }: { fileId: Id<"files"> }) {
       </Dialog>
     );
   }
+  if (documentId) return null;
   return <PreviewDialog file={data?.file ?? null} onClose={close} />;
 }
 
@@ -173,10 +171,10 @@ function SpacesHome() {
                   results.map(({ file, space }) => (
                     <Link
                       key={file._id}
-                      href={filesHref({ s: space.key, f: file.folderId, file: file._id })}
+                      href={file.documentId ? docHref(file.documentId) : filesHref({ s: space.key, f: file.folderId, file: file._id })}
                       className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"
                     >
-                      <FileTypeIcon contentType={file.contentType} name={file.name} />
+                      <FileTypeIcon contentType={file.contentType} name={file.name} document={Boolean(file.documentId)} />
                       <span className="min-w-0 flex-1 truncate">{file.name}</span>
                       <span className="shrink-0 text-xs text-muted-foreground">{label(space)}</span>
                     </Link>
@@ -260,13 +258,17 @@ type Dialogs =
   | { type: "deleteFolder"; folder: FolderView }
   | { type: "renameFile"; file: FileView }
   | { type: "moveFile"; file: FileView }
+  | { type: "newDocument" }
   | null;
 
 function FolderPage({ space, folderId }: { space: string; folderId: Id<"folders"> | undefined }) {
   const t = useTranslations("files");
+  const tDocs = useTranslations("docs");
   const label = useSpaceLabel();
+  const router = useRouter();
   const data = useFolder(space, folderId);
   const createFolder = useMutation(api.files.createFolder);
+  const createDocument = useMutation(api.documents.createInFolder);
   const renameFolder = useMutation(api.files.renameFolder);
   const moveFolder = useMutation(api.files.moveFolder);
   const removeFolder = useMutation(api.files.removeFolder);
@@ -344,6 +346,12 @@ function FolderPage({ space, folderId }: { space: string; folderId: Id<"folders"
           <Button size="sm" variant="secondary" onClick={() => setDialog({ type: "newFolder" })} aria-label={t("newFolder")}>
             <FolderPlusIcon />
             <span className="hidden sm:inline">{t("newFolder")}</span>
+          </Button>
+        ) : null}
+        {canUpload ? (
+          <Button size="sm" variant="secondary" onClick={() => setDialog({ type: "newDocument" })} aria-label={tDocs("new")}>
+            <FilePenLineIcon />
+            <span className="hidden sm:inline">{tDocs("new")}</span>
           </Button>
         ) : null}
         {canUpload ? (
@@ -451,7 +459,7 @@ function FolderPage({ space, folderId }: { space: string; folderId: Id<"folders"
                   key={file._id}
                   file={file}
                   canMove={file.canEdit && (access.upload || access.manage)}
-                  onOpen={() => setPreview(file)}
+                  onOpen={() => (file.documentId ? router.push(docHref(file.documentId)) : setPreview(file))}
                   onShare={() => setSharing([file])}
                   onRename={() => setDialog({ type: "renameFile", file })}
                   onMove={() => setDialog({ type: "moveFile", file })}
@@ -525,6 +533,13 @@ function FolderPage({ space, folderId }: { space: string; folderId: Id<"folders"
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <NewDocumentDialog
+        key={dialog?.type === "newDocument" ? "open" : "closed"}
+        open={dialog?.type === "newDocument"}
+        description={tDocs("newInFolderBody")}
+        onClose={() => setDialog(null)}
+        onCreate={(title) => createDocument({ space, folderId, title })}
+      />
       <ShareToChatDialog files={sharing} onClose={() => setSharing(null)} />
       <PreviewDialog file={preview} onClose={() => setPreview(null)} />
     </>
@@ -551,8 +566,9 @@ function FileRow({
   const t = useTranslations("files");
   const locale = useLocale() as Locale;
   const format = useFormatter();
+  const tDocs = useTranslations("docs");
   const meta = [
-    formatBytes(file.size),
+    file.documentId ? tDocs("document") : formatBytes(file.size),
     file.uploadedBy ? displayName(file.uploadedBy, locale) : null,
     format.dateTime(file._creationTime, { dateStyle: "medium" }),
     file.drive ? t("inDrive") : null,
@@ -565,7 +581,7 @@ function FileRow({
           <img src={file.thumbUrl} alt="" className="size-8 shrink-0 rounded object-cover" loading="lazy" />
         ) : (
           <span className="flex size-8 shrink-0 items-center justify-center">
-            <FileTypeIcon contentType={file.contentType} name={file.name} />
+            <FileTypeIcon contentType={file.contentType} name={file.name} document={Boolean(file.documentId)} />
           </span>
         )}
         <span className="min-w-0 flex-1">

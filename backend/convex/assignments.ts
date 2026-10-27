@@ -16,7 +16,7 @@ import {
   taskLink,
   taskSpaceOptions,
 } from "./lib/tasks";
-import { toSearchText } from "./lib/text";
+import { parseMentions, toSearchText } from "./lib/text";
 import { getUserSummaries, type UserSummary } from "./lib/users";
 import { toFileViews } from "./files";
 
@@ -158,6 +158,35 @@ function notificationParams(viewer: ViewerContext, assignment: Doc<"assignments"
   return { actorId: viewer.user._id, title: assignment.title, kind: assignment.kind, assignmentId: assignment._id };
 }
 
+/** Users mentioned in a description, as ids. */
+function descriptionMentions(ctx: QueryCtx, description: string | undefined) {
+  return parseMentions(description ?? "").userIds.flatMap((id) => {
+    const userId = ctx.db.normalizeId("users", id);
+    return userId ? [userId] : [];
+  });
+}
+
+/** Notifies people newly @mentioned in an open task's description who are in its chat. */
+async function notifyDescriptionMentions(
+  ctx: MutationCtx,
+  viewer: ViewerContext,
+  assignment: Doc<"assignments">,
+  channel: Doc<"channels">,
+  opts: { previous?: string; skip?: Id<"users">[] },
+) {
+  const before = new Set(descriptionMentions(ctx, opts.previous));
+  const skip = new Set([viewer.user._id, ...(opts.skip ?? [])]);
+  const fresh = descriptionMentions(ctx, assignment.description).filter((id) => !before.has(id) && !skip.has(id));
+  if (fresh.length === 0) return;
+  const audience = new Set(await channelAudience(ctx, channel));
+  await notifyMany(
+    ctx,
+    fresh.filter((id) => audience.has(id)),
+    { type: "task_mention", params: notificationParams(viewer, assignment), link: taskLink(assignment._id) },
+  );
+}
+
+/** Returns who was newly assigned (and notified). */
 async function insertAssignees(ctx: MutationCtx, viewer: ViewerContext, assignment: Doc<"assignments">, userIds: Id<"users">[]) {
   const added: Id<"users">[] = [];
   for (const userId of userIds) {
@@ -179,6 +208,7 @@ async function insertAssignees(ctx: MutationCtx, viewer: ViewerContext, assignme
     added.filter((id) => id !== viewer.user._id),
     { type: "assignment_new", params: notificationParams(viewer, assignment), link: taskLink(assignment._id) },
   );
+  return added;
 }
 
 async function publishDraft(ctx: MutationCtx, viewer: ViewerContext, assignment: Doc<"assignments">, channel: Doc<"channels">) {
@@ -206,7 +236,9 @@ async function publishDraft(ctx: MutationCtx, viewer: ViewerContext, assignment:
     draftAssigneeIds: undefined,
     draftEveryone: undefined,
   });
-  await insertAssignees(ctx, viewer, { ...assignment, status: "open" }, assignees);
+  const added = await insertAssignees(ctx, viewer, { ...assignment, status: "open" }, assignees);
+  // Assignees already get "assigned to you"; a mention would only repeat it.
+  await notifyDescriptionMentions(ctx, viewer, assignment, channel, { skip: added });
 }
 
 async function requireTask(ctx: QueryCtx, viewer: ViewerContext, assignmentId: Id<"assignments">) {
@@ -299,6 +331,11 @@ export const update = mutation({
       if (args.everyone !== undefined) patch.draftEveryone = args.everyone || undefined;
     }
     await ctx.db.patch("assignments", assignment._id, patch);
+    if (assignment.status === "open") {
+      await notifyDescriptionMentions(ctx, viewer, { ...assignment, ...draft }, channel, {
+        previous: assignment.description,
+      });
+    }
 
     const timeChanged =
       draft.dueAt !== assignment.dueAt ||
@@ -631,6 +668,7 @@ export const get = query({
       assignment.createdBy,
       ...rows.map((r) => r.assigneeId),
       ...(assignment.draftAssigneeIds ?? []),
+      ...descriptionMentions(ctx, assignment.description),
     ]);
     return {
       assignment: {

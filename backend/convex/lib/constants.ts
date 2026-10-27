@@ -95,6 +95,9 @@ export const LIMITS = {
   taskListLimit: 200,
   documentTitle: 120,
   documentsPerTask: 20,
+  documentsPerChat: 50,
+  /** Mention notifications sent per document save, so a pasted roster can't spam everyone. */
+  documentMentionsPerSave: 20,
 
   // Daily digest (Stage 3)
   digestHour: 10,
@@ -109,6 +112,9 @@ export const TIME_ZONE = "America/Los_Angeles";
 
 /** `/files/?s=public` is the shared space; department slugs can't use it. */
 export const PUBLIC_SPACE = "public";
+
+/** Content type of documents created in Files (they live in the database, not in storage). */
+export const DOC_CONTENT_TYPE = "text/markdown";
 
 /** Executables can't be uploaded to Files. */
 export const BLOCKED_EXTENSIONS = ["exe", "bat", "cmd", "sh", "app", "msi", "dmg", "apk", "com", "scr"] as const;
@@ -142,6 +148,8 @@ export const NOTIFICATION_TYPES = [
   "submission_received",
   "submission_reviewed",
   "assignment_comment",
+  "doc_mention",
+  "task_mention",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

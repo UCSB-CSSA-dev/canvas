@@ -275,7 +275,9 @@
     "attachUpload": "从设备上传（{days} 天后过期）",
     "attachFromFiles": "从文件中选择",
     "newTask": "发布任务或活动",
-    "saveToFiles": "保存到文件"
+    "saveToFiles": "保存到文件",
+    "documents": "文档",
+    "newDocument": "新建协作文档"
   },
   "roster": {
     "title": "组织架构",
@@ -519,7 +521,9 @@
     "submissionReceived": "{actor} 提交了「{title}」",
     "submissionApproved": "{actor} 通过了你的「{title}」",
     "submissionChanges": "{actor} 请你修改「{title}」",
-    "assignmentComment": "{actor} 评论了「{title}」"
+    "assignmentComment": "{actor} 评论了「{title}」",
+    "docMention": "{actor} 在文档「{title}」中提到了你",
+    "taskMention": "{actor} 在{kind}「{title}」中提到了你"
   },
   "groups": {
     "status": {
@@ -1025,7 +1029,8 @@
     "approve": "通过",
     "approvedToast": "已通过",
     "changesToast": "已要求修改",
-    "reviewHint": "已通过的提交也可以再次要求修改。"
+    "reviewHint": "已通过的提交也可以再次要求修改。",
+    "descriptionTooLong": "说明太长了（最多 {max} 个字符，每个 @ 也占用字符）"
   },
   "docs": {
     "title": "文档",
@@ -1036,7 +1041,6 @@
     "empty": "还没有文档。可以新建一个，和大家一起编辑。",
     "edited": "{name} 编辑于 {time}",
     "notFound": "文档不存在，或者你无权查看。",
-    "backToTasks": "返回任务",
     "backToTask": "返回任务",
     "more": "更多",
     "rename": "重命名",
@@ -1069,6 +1073,21 @@
     "taskList": "待办清单",
     "quote": "引用",
     "codeBlock": "代码块",
-    "divider": "分隔线"
+    "divider": "分隔线",
+    "document": "文档",
+    "mention": "提及成员 (@)",
+    "backHome": "返回首页",
+    "backToEvent": "返回活动",
+    "backToChat": "返回聊天",
+    "backToFolder": "返回文件夹",
+    "trashBody": "文档会移到回收站，{days} 天后永久删除。",
+    "trashed": "文档已移到回收站",
+    "newInFolderBody": "文档保存在当前文件夹，能在这里上传的人都可以一起编辑，支持 Markdown。",
+    "newInChatBody": "会在聊天里发一张文档卡片，聊天成员都可以一起编辑，支持 Markdown。",
+    "chatDocsTitle": "聊天文档",
+    "chatDocsBody": "这个聊天里创建的所有协作文档，聊天记录过期后也会保留在这里。",
+    "chatCardLabel": "协作文档",
+    "editedAt": "编辑于 {time}",
+    "cardGone": "文档已删除"
   }
 }

@@ -4,6 +4,7 @@ import { useTiptapSync } from "@convex-dev/prosemirror-sync/tiptap";
 import type { AnyExtension, Content, Editor } from "@tiptap/core";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import {
+  AtSignIcon,
   BoldIcon,
   CodeIcon,
   Heading1Icon,
@@ -22,7 +23,7 @@ import {
   Undo2Icon,
   type LucideIcon,
 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -37,21 +38,27 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import type { UserSummaryLike } from "@/components/people/types";
 import { api } from "@/lib/api";
+import type { Locale } from "@/lib/locale-store";
 import { cn } from "@/lib/utils";
 import { docExtensions, looksLikeMarkdown } from "./extensions";
+import { mentionSuggestion, PeopleSource } from "./mention-suggestion";
 
 /**
- * A task document, edited live by everyone who has it open (prosemirror-sync over Convex).
- * Markdown shortcuts render as you type ("# ", "- ", "**bold**", "```"), and pasted markdown is rendered.
+ * A document, edited live by everyone who has it open (prosemirror-sync over Convex).
+ * Markdown shortcuts render as you type ("# ", "- ", "**bold**", "```"), pasted markdown is rendered,
+ * and "@" mentions someone from `mentionable`.
  */
 export function DocEditor({
   documentId,
   editable,
+  mentionable,
   onEditor,
 }: {
   documentId: string;
   editable: boolean;
+  mentionable: UserSummaryLike[];
   onEditor?: (editor: Editor | null) => void;
 }) {
   const t = useTranslations("docs");
@@ -74,6 +81,7 @@ export function DocEditor({
       initialContent={sync.initialContent}
       extension={sync.extension}
       editable={editable}
+      mentionable={mentionable}
       onEditor={onEditor}
     />
   );
@@ -83,16 +91,27 @@ function LoadedEditor({
   initialContent,
   extension,
   editable,
+  mentionable,
   onEditor,
 }: {
   initialContent: Content;
   extension: AnyExtension;
   editable: boolean;
+  mentionable: UserSummaryLike[];
   onEditor?: (editor: Editor | null) => void;
 }) {
   const t = useTranslations("docs");
+  const locale = useLocale() as Locale;
   const editorRef = useRef<Editor | null>(null);
-  const extensions = useMemo(() => [...docExtensions(t("placeholder")), extension], [extension, t]);
+  // Suggestions read the latest list on each keystroke, so a changed list doesn't rebuild the editor.
+  const [people] = useState(() => new PeopleSource(mentionable));
+  useEffect(() => {
+    people.set(mentionable);
+  }, [people, mentionable]);
+  const extensions = useMemo(
+    () => [...docExtensions(t("placeholder"), mentionSuggestion(() => people.get(), locale)), extension],
+    [extension, t, locale, people],
+  );
   const editor = useEditor(
     {
       extensions,
@@ -172,6 +191,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       { icon: StrikethroughIcon, label: t("strike"), active: state.strike, run: () => chain().toggleStrike().run() },
       { icon: CodeIcon, label: t("code"), active: state.code, run: () => chain().toggleCode().run() },
       { icon: LinkIcon, label: t("link"), active: state.link, run: () => setLinkOpen(true) },
+      { icon: AtSignIcon, label: t("mention"), run: () => chain().insertContent("@").run() },
     ],
     [
       { icon: ListIcon, label: t("bulletList"), active: state.bullet, run: () => chain().toggleBulletList().run() },

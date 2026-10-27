@@ -1,4 +1,4 @@
-import { internal } from "../_generated/api";
+import { components, internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { BLOCKED_EXTENSIONS, LIMITS, PUBLIC_SPACE } from "./constants";
@@ -205,10 +205,15 @@ export async function storageInUse(ctx: QueryCtx, storageId: Id<"_storage">) {
 
 /**
  * Deletes a file row for good, frees its quota, and deletes the stored object when nothing else uses it.
- * Drive files don't count toward quota; they go to the Drive trash.
+ * Drive files don't count toward quota; they go to the Drive trash. Documents lose their content.
  */
 export async function purgeFile(ctx: MutationCtx, file: Doc<"files">) {
   await ctx.db.delete("files", file._id);
+  if (file.documentId) {
+    await ctx.db.delete("documents", file.documentId);
+    await ctx.runMutation(components.prosemirrorSync.lib.deleteDocument, { id: file.documentId });
+    return;
+  }
   if (file.driveFileId) {
     await ctx.scheduler.runAfter(0, internal.drive.trashFile, { driveFileId: file.driveFileId });
     return;

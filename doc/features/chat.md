@@ -114,6 +114,15 @@ There is no delete. Recall, edit, and react are never available through oversigh
 
 接龙 (sign-up list), 投票 (vote), and 集会 (weekly meeting finder) run inside org, department, and group chats; at most 5 at a time per chat. Running apps show as chips under the header, up to 3 plus "更多"; a chip opens a side panel. Approvers start apps directly; other participants propose and an approver reviews. Full rules are in [09-roadmap.md, step 2.9](../09-roadmap.md#29-chat-apps-接龙投票集会).
 
+## Shared documents
+
+In department, group and DM chats (not 全体), any participant who can post can start a collaborative document from the composer's attach menu ("新建协作文档 / New shared document"). It posts a document card in the chat and opens the editor (see [assignments.md](assignments.md#documents)).
+
+- Everyone who can post in the chat can edit it. The author or a chat manager can rename or delete it; moderators can delete it.
+- "文档 / Documents" in the chat menu lists every document of the chat (`documents.listForChat`), including ones whose card has expired with the chat history.
+- @mentions suggest the chat's participants. Document cards can't be edited, forwarded or multi-selected.
+- Up to 50 documents per chat (`LIMITS.documentsPerChat`).
+
 ## Multi-select
 
 - "多选" in the chat menu or a message's menu turns on checkboxes (up to 50 messages) and replaces the composer with an action bar.

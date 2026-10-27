@@ -222,7 +222,7 @@ export default defineSchema({
     channelId: v.id("channels"),
     authorId: v.id("users"),
     body: v.string(),                        // lightweight markdown; mentions as <@id> / <@all>
-    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"), v.literal("task"))),
+    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"), v.literal("task"), v.literal("doc"))),
     mentionUserIds: v.optional(v.array(v.id("users"))),
     mentionAll: v.optional(v.boolean()),
     replyToId: v.optional(v.id("messages")),
@@ -236,6 +236,7 @@ export default defineSchema({
     forward: v.optional(v.any()),            // snapshot of forwarded messages
     assignmentId: v.optional(v.id("assignments")), // kind "task": the task or event card (Stage 3)
     fileIds: v.optional(v.array(v.id("files"))),   // files shared from Files (Stage 3)
+    documentId: v.optional(v.id("documents")),      // kind "doc": a shared document card
   })
     .index("by_channel", ["channelId"])                 // ordered by _creationTime
     .index("by_channel_announcement", ["channelId", "announcement"]) // unseen announcements
@@ -330,6 +331,7 @@ export default defineSchema({
     uploadedBy: v.id("users"),
     deletedAt: v.optional(v.number()),
     deletedBy: v.optional(v.id("users")),
+    documentId: v.optional(v.id("documents")),     // a collaborative document (size 0, text/markdown)
   })
     .index("by_space_folder", ["departmentId", "folderId"])
     .index("by_storage", ["storageId"])
@@ -347,15 +349,21 @@ export default defineSchema({
     driveFolder: v.string(),                       // space key: "CSSA Hub Files/<key>" in Drive
   }),
 
-  // Collaborative markdown documents of a task or event. The content (ProseMirror snapshots and
-  // steps) lives in the prosemirrorSync component's own tables, keyed by the document id.
+  // Collaborative markdown documents. Exactly one parent: a task or event, a chat, or a file in
+  // Files. The content (ProseMirror snapshots and steps) lives in the prosemirrorSync component's
+  // own tables, keyed by the document id.
   documents: defineTable({
-    assignmentId: v.id("assignments"),
+    assignmentId: v.optional(v.id("assignments")),
+    channelId: v.optional(v.id("channels")),
+    fileId: v.optional(v.id("files")),
     title: v.string(),
     createdBy: v.id("users"),
     updatedAt: v.number(),
     updatedBy: v.id("users"),
-  }).index("by_assignment", ["assignmentId"]),
+    mentionedIds: v.optional(v.array(v.id("users"))), // already notified, so a save only notifies new mentions
+  })
+    .index("by_assignment", ["assignmentId"])
+    .index("by_channel", ["channelId"]),
 
   // ---------- Tasks and events (UI: 任务 / 活动) ----------
   assignments: defineTable({
@@ -566,6 +574,7 @@ deactivationRequests: defineTable({
 - `fileSpaces` rows are created lazily with the default quota. `usedBytes` changes in the same mutation that saves or purges a file, so it never needs recounting.
 - A stored object can be referenced by a chat attachment and by one or more `files` rows (Save to Files). Before deleting a stored object, check `attachments` and `files.by_storage`.
 - Moving is only within a space, so `files.departmentId` never changes.
+- A document in Files is a `files` row with `documentId` and a `documents` row with `fileId` pointing back. Purging the file deletes the document and its content.
 
 ### assignments and assignmentSubmissions
 
@@ -573,7 +582,7 @@ deactivationRequests: defineTable({
 - "Everyone in this chat" expands to individual `assignmentSubmissions` rows at publish time. People who join later are not added automatically, but the creator can add them.
 - `status` on `assignments` is the creator's control (draft, open, closed). Per-person progress lives in `assignmentSubmissions.status`.
 - Event helpers have rows too (status stays `assigned`), so reminders, the digest and "my tasks" treat tasks and events the same way.
-- Chat cards are `messages` with `kind: "task"` and `assignmentId`. Messages that share a file have `fileIds`.
+- Chat cards are `messages` with `kind: "task"` and `assignmentId`. Messages that share a file have `fileIds`. Shared document cards have `kind: "doc"` and `documentId`.
 
 ### auditLogs
 

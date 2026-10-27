@@ -89,6 +89,10 @@ export function useNotificationText() {
         };
       case "assignment_comment":
         return { title: t("assignmentComment", { actor: person("actorId"), title }), detail: preview };
+      case "doc_mention":
+        return { title: t("docMention", { actor: person("actorId"), title }) };
+      case "task_mention":
+        return { title: t("taskMention", { actor: person("actorId"), kind: taskKind(), title }) };
     }
   };
 }

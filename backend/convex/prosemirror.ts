@@ -1,5 +1,5 @@
 import type { DataModel } from "./_generated/dataModel";
-import { documentAccess, prosemirrorSync } from "./lib/documents";
+import { documentAccess, prosemirrorSync, recordDocumentMentions } from "./lib/documents";
 import { appError } from "./lib/errors";
 
 /** Sync endpoints for `useTiptapSync(api.prosemirror, documentId)`. */
@@ -12,8 +12,9 @@ export const { getSnapshot, submitSnapshot, latestVersion, getSteps, submitSteps
       const { canEdit } = await documentAccess(ctx, id);
       if (!canEdit) throw appError("FORBIDDEN");
     },
-    onSnapshot: async (ctx, id) => {
-      const { doc, viewer } = await documentAccess(ctx, id);
-      await ctx.db.patch("documents", doc._id, { updatedAt: Date.now(), updatedBy: viewer.user._id });
+    onSnapshot: async (ctx, id, snapshot) => {
+      const access = await documentAccess(ctx, id);
+      await ctx.db.patch("documents", access.doc._id, { updatedAt: Date.now(), updatedBy: access.viewer.user._id });
+      await recordDocumentMentions(ctx, access, snapshot);
     },
   });

@@ -201,7 +201,9 @@ export default defineSchema({
     channelId: v.id("channels"),
     authorId: v.id("users"),
     body: v.string(),
-    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"), v.literal("task"))),
+    kind: v.optional(
+      v.union(v.literal("user"), v.literal("system"), v.literal("forward"), v.literal("task"), v.literal("doc")),
+    ),
     mentionUserIds: v.optional(v.array(v.id("users"))),
     mentionAll: v.optional(v.boolean()),
     replyToId: v.optional(v.id("messages")),
@@ -219,6 +221,8 @@ export default defineSchema({
     forward: v.optional(v.any()),
     /** kind "task": the task or event this card shows. */
     assignmentId: v.optional(v.id("assignments")),
+    /** kind "doc": the chat document this card opens. */
+    documentId: v.optional(v.id("documents")),
     /** Files shared from Files, shown as link cards. */
     fileIds: v.optional(v.array(v.id("files"))),
   })
@@ -288,6 +292,8 @@ export default defineSchema({
     storageId: v.optional(v.id("_storage")),
     /** Files over 10 MB, or uploaded when the space was full, live in the CSSA Google Drive. */
     driveFileId: v.optional(v.string()),
+    /** A collaborative document created in Files; its content lives in the prosemirrorSync component. */
+    documentId: v.optional(v.id("documents")),
     thumbStorageId: v.optional(v.id("_storage")),
     name: v.string(),
     contentType: v.string(),
@@ -316,14 +322,23 @@ export default defineSchema({
     driveFolder: v.string(),
   }),
 
-  /** Collaborative markdown documents of a task or event; content lives in the prosemirrorSync component. */
+  /**
+   * Collaborative markdown documents; content lives in the prosemirrorSync component.
+   * Exactly one parent: a task or event, a chat, or a file in Files (whose name is the title).
+   */
   documents: defineTable({
-    assignmentId: v.id("assignments"),
+    assignmentId: v.optional(v.id("assignments")),
+    channelId: v.optional(v.id("channels")),
+    fileId: v.optional(v.id("files")),
     title: v.string(),
     createdBy: v.id("users"),
     updatedAt: v.number(),
     updatedBy: v.id("users"),
-  }).index("by_assignment", ["assignmentId"]),
+    /** People mentioned in the last saved version, so only new mentions notify. */
+    mentionedIds: v.optional(v.array(v.id("users"))),
+  })
+    .index("by_assignment", ["assignmentId"])
+    .index("by_channel", ["channelId"]),
 
   /** Tasks and events (UI: 任务 / 活动). */
   assignments: defineTable({

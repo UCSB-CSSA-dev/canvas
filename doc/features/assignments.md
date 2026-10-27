@@ -75,7 +75,7 @@ Opened from "发布任务 / New task" in a chat's composer menu (shown only to p
 | --- | --- | --- |
 | Type | Yes | 任务 or 活动 |
 | Title | Yes | Max 120 characters |
-| Description | No | Markdown with preview |
+| Description | No | Markdown. Type `@` to mention someone in the chat (stored as `<@userId>`) |
 | Assignees | Yes | Pick people, or "整个聊天 / Everyone in this chat" |
 | Due date and time | No | Tasks only |
 | Start, end, location | Start required | Events only |
@@ -90,6 +90,7 @@ Publishing:
 - Creates one `assignmentSubmissions` row per assignee.
 - Posts the card in the chat.
 - Sends `assignment_new` notifications (in-app and push).
+- Sends `task_mention` to people @mentioned in the description who can see the chat, except those just assigned (they already get `assignment_new`). Editing an open task's description notifies only newly mentioned people.
 
 ## Chat card
 
@@ -136,15 +137,16 @@ On phones the bottom bar's 任务 tab opens this page; 部长 and 主席团 swit
 
 ## Documents
 
-A task or event can have collaborative documents (文档), like a shared Google Doc: a run of show, meeting notes, a script. They are the only thing created inside the Hub; every other file is uploaded.
+A task or event can have collaborative documents (文档), like a shared Google Doc: a run of show, meeting notes, a script. The same editor is used for documents in a folder ([files.md](files.md#documents)) and in a chat ([chat.md](chat.md#shared-documents)).
 
-- **Editing:** live, by everyone who has the document open, through the Convex [`@convex-dev/prosemirror-sync`](https://www.convex.dev/components/prosemirror-sync) component and a TipTap editor (`/assignments/doc/?d=<id>`). Changes merge between clients and save automatically.
+- **Editing:** live, by everyone who has the document open, through the Convex [`@convex-dev/prosemirror-sync`](https://www.convex.dev/components/prosemirror-sync) component and a TipTap editor (`/docs/?d=<id>`). Changes merge between clients and save automatically.
 - **Markdown, rendered as you type:** `# ` heading, `- ` list, `1. ` numbered list, `[ ] ` checklist, `> ` quote, `**bold**`, `*italic*`, `` `code` ``, ```` ``` ```` code block, `---` divider. Pasted markdown is rendered too. The editor only has features markdown can express (headings 1 to 3, bold, italic, strikethrough, code, links, lists, checklists, quotes, code blocks, dividers), so every document exports cleanly.
+- **Mentions:** typing `@` (or the @ toolbar button) suggests people who can open the document: for a task, the chat's audience, assignees and creator. A mention is stored as the user's id. When the document saves, newly mentioned people who can open it get `doc_mention` (up to 20 per save; the author is skipped). The exported markdown shows "@Name".
 - **Export:** "下载 Markdown / Download Markdown" saves a `.md` file; "导出 PDF / Export PDF" prints just the document in black on white (choose "Save as PDF").
 - **Who:** anyone who can see the task can read its documents. Reviewers and assignees (or event helpers) can create and edit them until the task is closed, when they become read-only. The author or a reviewer can delete one. On a draft, only the creator.
 - Up to 20 documents per task (`LIMITS.documentsPerTask`); the component supports documents up to about 1 MB.
 - Deleting a draft deletes its documents. Content lives in the component's tables; the `documents` table holds the title, the task and who edited last.
-- The task description is markdown too and is rendered the same way on the task page.
+- The task description is markdown too and is rendered the same way on the task page, with @mentions as gold chips.
 
 ## Reminders
 
@@ -171,9 +173,9 @@ Changing an open task's due date, or an event's time or place, notifies the assi
 | `assignments.submit`, `markDone`, `review` | mutation |
 | `assignments.listComments`, `addComment` | query, mutation |
 | `internal.assignments.sendReminders` | internal mutation (hourly cron) |
-| `documents.listForTask`, `get` | query |
-| `documents.create`, `rename`, `remove` | mutation |
-| `prosemirror.getSnapshot`, `latestVersion`, `getSteps`, `submitSteps`, `submitSnapshot` | sync API for `useTiptapSync`; reads and writes are checked against the task |
+| `documents.listForTask`, `listForChat`, `get` | query |
+| `documents.create`, `createInChat`, `createInFolder`, `rename`, `remove` | mutation |
+| `prosemirror.getSnapshot`, `latestVersion`, `getSteps`, `submitSteps`, `submitSnapshot` | sync API for `useTiptapSync`; reads and writes are checked against the document's task, chat or folder |
 
 ## Acceptance criteria
 

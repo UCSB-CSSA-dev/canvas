@@ -6,26 +6,29 @@ Three delivery channels:
 
 1. **In-app notifications**: a bell icon with an unread count, plus the `/notifications` page. Real time through Convex.
 2. **Push notifications** (Web Push): system notifications on devices where the user turned them on in Settings, even when CSSA Hub is closed. See [Push notifications](#push-notifications).
-3. **Email**: sent through Gmail by a Google Apps Script web app. Used sparingly for things people must not miss. Transport details are in [06-email-apps-script.md](../06-email-apps-script.md).
+3. **Email**: one daily digest per person, sent through a dedicated free Gmail account by a Google Apps Script web app. Nothing else is emailed. Transport details are in [06-email-apps-script.md](../06-email-apps-script.md).
 
 ## Triggers
 
-| Event | Recipients | In-app type | Email | Email preference |
-| --- | --- | --- | --- | --- |
-| New account request | Presidium + leads of requested departments | (admin badge) | Yes | always on for approvers |
-| Email pre-approved (optional checkbox when pre-approving) | The pre-approved email | (none, no account yet) | Yes | always |
-| Account approved | Applicant | `account_approved` | Yes | always |
-| Account rejected | Applicant | `account_rejected` | Yes | always |
-| Added to a department | User | `added_to_department` | No | - |
-| New assignment published | Each assignee | `assignment_new` | Yes | `assignments` |
-| Assignment due in 24 h | Assignees not done | `assignment_due_soon` | Yes | `assignments` |
-| Assignment overdue | Assignee; creator gets daily summary | `assignment_overdue` | Yes | `assignments` |
-| Submission received | Assignment creator | `submission_received` | No (daily summary) | `assignments` |
-| Submission reviewed | Assignee | `submission_reviewed` | Only for "changes requested" | `assignments` |
-| @mention or reply | Mentioned user | `mention` | Daily digest of unread mentions | `mentions` |
-| Announcement posted | Channel members | `announcement` | Yes | `announcements` |
+Every notification below is in-app and pushed. Email is only the [daily digest](#daily-digest).
 
-"Always" emails ignore preferences because they are about account access.
+| Event | Recipients | Type |
+| --- | --- | --- |
+| @mention or reply | Mentioned or replied-to user | `mention`, `reply` |
+| Announcement posted | Everyone in the chat | `announcement` |
+| Added to a department or group | That user | `added_to_department`, `added_to_group` |
+| Group and chat-app events | See [chat.md](chat.md) | `group_*`, `app_*` |
+| Deactivation request reviewed | The requester | `deactivation_reviewed` |
+| Task or event published | Each assignee | `assignment_new` |
+| Task or event changed (due date, time, place) | Assignees | `assignment_updated` |
+| Task due in 24 hours | Assignees who haven't submitted | `assignment_due_soon` |
+| Task overdue (once) | The same | `assignment_overdue` |
+| Event starts in 24 hours | Helpers | `event_soon` |
+| Submission received | Creator | `submission_received` |
+| Submission approved or changes requested | Assignee | `submission_reviewed` |
+| New comment on a submission | The other side (assignee or reviewers) | `assignment_comment` |
+
+Account requests, approvals and invites are not emailed. Approvers see the roster badge, and applicants see the result when they next sign in.
 
 ## In-app notifications
 
@@ -63,32 +66,33 @@ Standard Web Push (service worker + VAPID), so it works with a static GitHub Pag
 
 ### Principles
 
-- Gmail sending quotas are low (roughly **100 recipients per day** on a free Gmail account, around **1,500 per day** on Google Workspace). The design must stay well under them:
-  - No per-message chat emails; mentions go out as one daily digest.
-  - One email per assignment per assignee, not one per event.
-  - Announcement emails go to one message with recipients in BCC, chunked to 50 per send.
-- Every email is a row in `emailJobs` first (an outbox). Never call Apps Script directly from user-facing mutations.
-- Language: use the recipient's `users.locale`.
-- Every email includes a link back to the app and a footer: "在设置中管理邮件提醒 / Manage email reminders in Settings".
+- A free Gmail account can send to roughly **100 recipients per day**. One email per person per day keeps the Hub under that until about 90 people have open tasks on the same day.
+- Every email is a row in `emailJobs` first (an outbox). User-facing mutations never call Apps Script directly.
+- Language: the recipient's `users.locale`.
+
+### Daily digest
+
+Sent every day, weekends included, at **10:00 AM Pacific**.
+
+- **Who gets it:** every approved, active user who has something in it. A day with nothing to report sends nothing. There's no opt-out.
+- **Where it goes:** `users.digestEmail` if set, otherwise their sign-in email. Settings → 邮件摘要 has one field, "接收邮箱 / Send my digest to", with a reset to the sign-in address. The address only has to look valid; it isn't verified.
+- **What's in it** (only the viewer's own tasks and events, open ones only):
+  1. **今天 Today** (highlighted at the top): overdue tasks, tasks due today, and events today with time and place.
+  2. **未来一周的活动 Events in the next 7 days**, after today.
+  3. **待办 To-do:** every other open task: due later, or no due date. Tasks waiting for review aren't to-dos; tasks with changes requested are.
+- Each item links to its task page. The footer says it's a daily summary and that the address can be changed in Settings.
+- Rendered on the Convex side in `convex/lib/emailTemplates.ts` (template `daily_digest`, zh and en). The Apps Script stays a thin relay. Escape every user-provided value.
 
 ### Pipeline
 
-1. A mutation or cron calls `internal.email.enqueue({ userId | to, template, params, dedupeKey? })`.
-   - Skips when the user's preference is off (for preference-controlled templates).
-   - Skips when a job with the same `dedupeKey` already exists.
-   - Inserts `status = "queued"` and schedules `internal.email.send` immediately.
-2. `internal.email.send` (action) marks the job `sending`, POSTs to Apps Script, then marks `sent` or `failed` with `attempts + 1` and `lastError`.
-3. A cron every 10 minutes re-queues `failed` jobs with `attempts < 5`, using backoff (`sendAfter = now + 2^attempts minutes`).
-4. If the Apps Script reports a quota error, stop sending until the next day by setting `sendAfter` to the next midnight Pacific time for all queued jobs.
+1. An hourly cron (`internal.email.queueDigests`) does nothing unless the Pacific hour is 10, which handles daylight saving time. It schedules `internal.email.queueDigestFor` for each approved user, so one large mutation never builds everyone's digest.
+2. `queueDigestFor` builds the user's digest (`convex/lib/digest.ts`), skips it if empty, and otherwise inserts a `queued` job with `dedupeKey = digest:<userId>:<YYYY-MM-DD>` (a second run the same day does nothing) and schedules `internal.email.send`.
+3. `internal.email.send` (action) claims the job (`sending`), POSTs to Apps Script, then records the outcome through `internal.email.finish`: `sent`, or `failed` with `attempts + 1` and `lastError`. Without `APPS_SCRIPT_URL` and `APPS_SCRIPT_SHARED_SECRET` the job is `skipped` as "not configured".
+4. A cron every 10 minutes retries `failed` jobs with `attempts < 5`, with backoff (`sendAfter = now + 2^attempts minutes`). Jobs from an earlier day are marked `skipped` instead, since tomorrow's digest replaces them.
+5. If Apps Script reports `QUOTA`, all of today's queued jobs become `skipped`. The admin overview shows it.
+6. With `EMAIL_DRY_RUN=true` (dev), `send` logs the subject and recipient count and marks the job `sent` without calling the script.
 
-### Digest
-
-- Daily cron at 8:00 PM Pacific: for each user with unread `mention` notifications from the last 24 hours, and `emailPrefs.mentions = true`, send one `mention_digest` email listing up to 10 of them.
-- Creators get a daily `creator_summary` email with new submissions and overdue counts for their open assignments (only if there is something to report).
-
-### Templates
-
-Defined in [06-email-apps-script.md](../06-email-apps-script.md#templates). Rendered on the Convex side (subject and HTML body in both languages) so the Apps Script stays a thin relay.
+The admin overview has an email card: today's digest counts (sent, failed, skipped) and the last error.
 
 ## Acceptance criteria
 
@@ -96,6 +100,8 @@ Defined in [06-email-apps-script.md](../06-email-apps-script.md#templates). Rend
 - [ ] With push on, a mention or DM shows a system notification on a closed desktop browser, an Android phone, and an iPhone home-screen app; tapping it opens the right chat.
 - [ ] After signing out on a device, that device stops getting pushes.
 - [ ] Notifications render in the viewer's current language.
-- [ ] Turning off an email preference stops those emails but keeps in-app notifications.
+- [ ] At 10:00 AM Pacific, everyone with open tasks or upcoming events gets exactly one digest; people with nothing get none.
+- [ ] The digest puts today's tasks and events first, then the next week's events, then all other to-dos.
+- [ ] A digest goes to the address set in Settings when there is one.
 - [ ] Failed emails retry up to 5 times with backoff and never send duplicates.
-- [ ] A quota error pauses sending until the next day instead of retrying in a loop.
+- [ ] A quota error skips the rest of the day's digests instead of retrying in a loop.

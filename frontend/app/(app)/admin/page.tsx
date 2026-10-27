@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
+import { EmailCard, StorageCard } from "@/components/admin/storage-card";
 import { useViewer } from "@/components/auth/account-state";
 import { formatBytes } from "@/components/chat/attachments";
 import { PageHeader } from "@/components/layout/app-shell";
@@ -85,6 +86,12 @@ export default function AdminPage() {
                     hint={t("files", { count: overview.storage.files })}
                   />
                 ) : null}
+                {overview.tasks ? (
+                  <>
+                    <Stat label={t("openTasks")} value={overview.tasks.open} href="/assignments/?tab=managed" />
+                    <Stat label={t("overdueTasks")} value={overview.tasks.overdue} href="/assignments/?tab=managed" highlight />
+                  </>
+                ) : null}
               </div>
 
               <Card>
@@ -114,6 +121,8 @@ export default function AdminPage() {
                   ))}
                 </CardContent>
               </Card>
+              {overview.storage ? <StorageCard storage={overview.storage} /> : null}
+              {overview.email ? <EmailCard email={overview.email} /> : null}
               {viewer.isAdmin ? <ArchivedDepartments /> : null}
             </>
           )}

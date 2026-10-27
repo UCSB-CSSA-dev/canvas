@@ -12,6 +12,7 @@ import {
 } from "./lib/channels";
 import { LIMITS, REACTIONS } from "./lib/constants";
 import { appError } from "./lib/errors";
+import { loadSpace, spaceAccess } from "./lib/files";
 import {
   eraseMessageContent,
   isLiveUserContent,
@@ -178,6 +179,8 @@ export const send = mutation({
     body: v.string(),
     replyToId: v.optional(v.id("messages")),
     attachmentIds: v.optional(v.array(v.id("attachments"))),
+    /** Files shared from Files; the viewer must be able to see each one. */
+    fileIds: v.optional(v.array(v.id("files"))),
     announcement: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -189,7 +192,15 @@ export const send = mutation({
 
     const attachmentIds = [...new Set(args.attachmentIds ?? [])];
     if (attachmentIds.length > LIMITS.attachmentsPerMessage) throw appError("INVALID", "attachments");
-    const body = cleanBody(args.body, attachmentIds.length > 0);
+    const fileIds = [...new Set(args.fileIds ?? [])];
+    if (fileIds.length > LIMITS.sharedFilesPerMessage) throw appError("INVALID", "fileIds");
+    for (const fileId of fileIds) {
+      const file = await ctx.db.get("files", fileId);
+      if (!file || file.deletedAt) throw appError("INVALID", "fileIds");
+      const space = await loadSpace(ctx, file.departmentId);
+      if (!spaceAccess(viewer, space.department).view) throw appError("INVALID", "fileIds");
+    }
+    const body = cleanBody(args.body, attachmentIds.length > 0 || fileIds.length > 0);
 
     const attachments: Doc<"attachments">[] = [];
     for (const id of attachmentIds) {
@@ -222,6 +233,7 @@ export const send = mutation({
       replyToId: replyTo?._id,
       announcement: announcement || undefined,
       searchText: toSearchText(body),
+      fileIds: fileIds.length > 0 ? fileIds : undefined,
     });
     const expiresAt = now + LIMITS.attachmentRetentionDays * 24 * 60 * 60 * 1000;
     for (const attachment of attachments) {
@@ -257,9 +269,10 @@ export const edit = mutation({
   handler: async (ctx, args) => {
     const viewer = await requireApproved(ctx);
     const { message, channel, access } = await requireOwnLiveMessage(ctx, viewer, args.messageId);
-    if (message.kind === "forward") throw appError("FORBIDDEN");
+    if (message.kind === "forward" || message.kind === "task") throw appError("FORBIDDEN");
     requirePost(access);
     const hasAttachments =
+      (message.fileIds?.length ?? 0) > 0 ||
       (await ctx.db
         .query("attachments")
         .withIndex("by_message", (q) => q.eq("messageId", message._id))
@@ -428,7 +441,7 @@ export const forward = mutation({
     const messages: Doc<"messages">[] = [];
     for (const id of messageIds) {
       const message = await ctx.db.get("messages", id);
-      if (!message || message.channelId !== source._id || !isLiveUserContent(message)) {
+      if (!message || message.channelId !== source._id || !isLiveUserContent(message) || message.kind === "task") {
         throw appError("INVALID", "messageIds");
       }
       messages.push(message);

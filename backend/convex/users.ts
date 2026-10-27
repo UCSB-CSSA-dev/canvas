@@ -95,6 +95,7 @@ export const viewer = query({
     return {
       _id: user._id,
       email: user.email,
+      digestEmail: user.digestEmail,
       name: user.name,
       image: user.avatarUrl ?? user.image,
       hasCustomAvatar: user.avatarStorageId !== undefined,
@@ -273,6 +274,19 @@ export const setLocale = mutation({
   handler: async (ctx, args) => {
     const { user } = await requireViewer(ctx);
     await ctx.db.patch("users", user._id, { locale: args.locale });
+  },
+});
+
+/** Where the daily digest goes; null falls back to the sign-in email. Not verified (doc 10, Q13). */
+export const setDigestEmail = mutation({
+  args: { email: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const { user } = await requireApproved(ctx);
+    const email = args.email?.trim().toLowerCase() || undefined;
+    if (email && (email.length > LIMITS.digestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+      throw appError("INVALID", "email");
+    }
+    await ctx.db.patch("users", user._id, { digestEmail: email === user.email ? undefined : email });
   },
 });
 

@@ -26,6 +26,7 @@ export function useNotificationText() {
     const name = String(params.name ?? "");
     const title = String(params.title ?? "");
     const kind = () => tApps(`kind.${String(params.kind)}` as "kind.poll");
+    const taskKind = () => t(params.kind === "event" ? "kindEvent" : "kindTask");
     const preview = typeof params.preview === "string" && params.preview ? params.preview : undefined;
     const note = typeof params.note === "string" && params.note ? params.note : undefined;
 
@@ -69,6 +70,25 @@ export function useNotificationText() {
         return { title: t("appRejected", { reviewer: person("reviewerId"), kind: kind(), title }), detail: note };
       case "app_due_soon":
         return { title: t("appDueSoon", { kind: kind(), title }) };
+      case "assignment_new":
+        return { title: t("assignmentNew", { actor: person("actorId"), kind: taskKind(), title }) };
+      case "assignment_updated":
+        return { title: t("assignmentUpdated", { kind: taskKind(), title }) };
+      case "assignment_due_soon":
+        return { title: t("assignmentDueSoon", { title }) };
+      case "assignment_overdue":
+        return { title: t("assignmentOverdue", { title }) };
+      case "event_soon":
+        return { title: t("eventSoon", { title }) };
+      case "submission_received":
+        return { title: t("submissionReceived", { actor: person("actorId"), title }) };
+      case "submission_reviewed":
+        return {
+          title: t(params.decision === "approve" ? "submissionApproved" : "submissionChanges", { actor: person("actorId"), title }),
+          detail: note,
+        };
+      case "assignment_comment":
+        return { title: t("assignmentComment", { actor: person("actorId"), title }), detail: preview };
     }
   };
 }

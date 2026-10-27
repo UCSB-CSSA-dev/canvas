@@ -1,10 +1,12 @@
-# 06 Email via Google Apps Script
+# 06 Email and Google Drive via Google Apps Script
 
 ## Why
 
-CSSA already has a Google account. A Google Apps Script web app can send mail through that account's Gmail for free, with no third-party email provider. Convex calls the script over HTTPS.
+The Hub sends one email: the [daily digest](features/notifications-and-email.md#daily-digest). It goes out from a **dedicated free Gmail account** created just for CSSA Hub (not anyone's personal account), so the sender stays the same across officer terms. A Google Apps Script web app on that account sends through its Gmail for free, with no third-party email provider. Convex calls the script over HTTPS.
 
-The script is a **thin relay**: Convex decides who gets what and renders the subject and body. The script only checks the secret and sends.
+The same script also stores large files in that account's **Google Drive** ([files.md](features/files.md#google-drive)): files over 10 MB, and uploads to a space that is out of quota.
+
+The script is a **thin relay**: Convex decides who gets what, renders every email and checks every upload. The script only checks the secret, then sends, or opens, verifies, shares and trashes Drive files.
 
 ## Overview
 
@@ -22,23 +24,38 @@ sequenceDiagram
 
 ## Request contract
 
-`POST <APPS_SCRIPT_URL>` with `Content-Type: application/json` (Apps Script receives it as `e.postData.contents`).
+`POST <APPS_SCRIPT_URL>` with `Content-Type: application/json` (Apps Script receives it as `e.postData.contents`). Every request has `secret` and `action`; Convex sends them through `callAppsScript` in `convex/lib/appsScript.ts`. A request without `action` is treated as `sendEmail`.
+
+### `sendEmail`
 
 ```json
 {
+  "action": "sendEmail",
   "secret": "<APPS_SCRIPT_SHARED_SECRET>",
   "jobId": "k17abc...",
   "to": "student@ucsb.edu",
   "bcc": ["a@ucsb.edu", "b@ucsb.edu"],
-  "subject": "【CSSA Hub】新任务：迎新晚会海报设计",
+  "subject": "【CSSA Hub】今日待办：2 项今天截止",
   "html": "<p>...</p>",
   "text": "...",
   "replyTo": "cssa@example.com"
 }
 ```
 
-- `to` or `bcc` must be present. `bcc` is used for announcement emails, chunked to at most 50 addresses per request.
+- `to` or `bcc` must be present. The digest uses `to` only (one person per request); `bcc` is kept for future use, at most 50 addresses per request.
 - `jobId` is for logging only.
+
+### Google Drive
+
+| Action | Request | Reply when `ok` |
+| --- | --- | --- |
+| `driveSession` | `name`, `size` (bytes, at most 500 MB), `mimeType`, `folder` (space key such as `events` or `public`), `origin` (the site origin) | `uploadUrl`: a resumable upload session in `CSSA Hub Files/<folder>` |
+| `driveFinalize` | `fileId` | `name`, `size`, `mimeType`, after checking the file is under `CSSA Hub Files` and setting it to "anyone with the link can view" |
+| `driveTrash` | `fileId` | Moves the file to the Drive trash (only files under `CSSA Hub Files`) |
+
+- The session is created with the Drive API (`ScriptApp.getOAuthToken()` and `UrlFetchApp`), passing `origin` as the `Origin` header so Drive accepts the browser's cross-site `PUT` to the session URL.
+- `CSSA Hub Files` is created on first use; its id is kept in the `DRIVE_ROOT_ID` script property. One subfolder per space, named by space key.
+- `driveSession` returns `DRIVE_FULL` when the account's 15 GB is used up.
 
 ## Response contract
 
@@ -49,65 +66,39 @@ Apps Script web apps always answer HTTP 200 (after a redirect), so the result is
 ```
 
 ```json
-{ "ok": false, "code": "UNAUTHORIZED" | "INVALID" | "QUOTA" | "SEND_FAILED", "error": "message" }
+{ "ok": false, "code": "UNAUTHORIZED" | "INVALID" | "QUOTA" | "DRIVE_FULL" | "SEND_FAILED", "error": "message" }
 ```
 
 The Convex action must follow redirects (`fetch` does by default) and parse the body. On `QUOTA`, it pauses sending until the next day (see [notifications-and-email.md](features/notifications-and-email.md#pipeline)).
 
 ## Apps Script source (`google-apps-script/Code.gs`)
 
-Reference implementation to keep in the repo and paste into the Apps Script editor:
+The script lives in [`google-apps-script/Code.gs`](../google-apps-script/Code.gs); paste the whole file into the Apps Script editor. It:
 
-```javascript
-const SECRET = PropertiesService.getScriptProperties().getProperty("SHARED_SECRET");
-const SENDER_NAME = "CSSA Hub";
-
-function doPost(e) {
-  try {
-    const body = JSON.parse(e.postData.contents);
-    if (!SECRET || body.secret !== SECRET) {
-      return json({ ok: false, code: "UNAUTHORIZED", error: "bad secret" });
-    }
-    if ((!body.to && !(body.bcc && body.bcc.length)) || !body.subject || !body.html) {
-      return json({ ok: false, code: "INVALID", error: "missing fields" });
-    }
-    const recipients = (body.to ? 1 : 0) + (body.bcc ? body.bcc.length : 0);
-    if (MailApp.getRemainingDailyQuota() < recipients) {
-      return json({ ok: false, code: "QUOTA", error: "daily quota reached" });
-    }
-    GmailApp.sendEmail(body.to || "", body.subject, body.text || "", {
-      htmlBody: body.html,
-      bcc: (body.bcc || []).join(","),
-      name: SENDER_NAME,
-      replyTo: body.replyTo || undefined,
-    });
-    return json({ ok: true });
-  } catch (err) {
-    return json({ ok: false, code: "SEND_FAILED", error: String(err) });
-  }
-}
-
-function json(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-```
+- Reads `SHARED_SECRET` from Script Properties and compares it in constant time; anything else gets `UNAUTHORIZED`.
+- Checks that `subject` and `html` are present, and that every address in `to` and `bcc` looks valid (at most 50 in `bcc`); otherwise `INVALID`.
+- Returns `QUOTA` when `MailApp.getRemainingDailyQuota()` is lower than the number of recipients.
+- Sends with `GmailApp.sendEmail` as "CSSA Hub", with `replyTo` when given; any exception becomes `SEND_FAILED`.
+- Answers `GET` with `{ "ok": true }`, so opening the `/exec` URL in a browser confirms the deployment is reachable.
+- Routes Drive actions as described [above](#google-drive), only ever touching files inside `CSSA Hub Files`.
+- Has a `setup()` function that emails the script's own account and creates the `CSSA Hub Files` folder. Run it once from the editor to grant the Gmail and Drive permissions.
 
 ## Deployment steps
 
-1. Sign in to the CSSA Google account and create a new Apps Script project named "CSSA Hub Mailer".
+1. Create a dedicated Gmail account for CSSA Hub (keep its password with the 主席团 handover notes), sign in to it, and create a new Apps Script project named "CSSA Hub Relay".
 2. Paste `Code.gs`.
 3. **Project Settings, then Script Properties**: add `SHARED_SECRET` with a long random value (for example `openssl rand -hex 32`).
 4. **Deploy, then New deployment, then Web app**:
    - Execute as: **Me** (the CSSA account).
    - Who has access: **Anyone** (the shared secret is what protects it).
-5. Authorize the Gmail scopes when prompted.
+5. Select `setup` in the editor toolbar and click **Run**. Approve the Gmail, Drive and external request permissions, then check the CSSA inbox for the test email and Drive for the `CSSA Hub Files` folder.
 6. Copy the web app URL (`https://script.google.com/macros/s/.../exec`).
 7. In Convex (dashboard or CLI), set environment variables for each deployment:
    - `APPS_SCRIPT_URL`
    - `APPS_SCRIPT_SHARED_SECRET`
    - `EMAIL_REPLY_TO` (optional)
-8. When `Code.gs` changes, create a **new version** of the existing deployment so the URL stays the same.
+8. When `Code.gs` changes, paste it, run `setup` again if Google asks for new permissions, then **Deploy, Manage deployments, Edit, Version: New version** so the URL stays the same.
+9. Test a Drive upload: upload a file over 10 MB to any folder in 文件. If the browser reports a CORS error on the `PUT`, check that `SITE_URL` in Convex is the real site address.
 
 Use a separate Apps Script deployment (or at least a separate secret) for dev and prod, so local testing never emails real members. In dev, set `EMAIL_DRY_RUN=true` to make `internal.email.send` log the payload and mark the job `sent` without calling the script.
 
@@ -118,24 +109,14 @@ Use a separate Apps Script deployment (or at least a separate secret) for dev an
 | Free Gmail | 100 |
 | Google Workspace | 1,500 |
 
-Each address in `to` and `bcc` counts. The app design keeps volume low: digests instead of per-message emails, and announcement emails only for users who opt in. Check the current limits in Google's documentation before launch.
+Each address in `to` and `bcc` counts. The Hub sends at most one email per person per day, only to people with open tasks or upcoming events, so a free account lasts until about 90 such people on the same day. Past that, the rest of the day's digests are skipped (see [the pipeline](features/notifications-and-email.md#pipeline)). Check the current limits in Google's documentation before launch.
 
 ## Templates
 
-Rendered in `convex/emailTemplates.ts`. Each template has a `zh` and `en` version with subject, HTML, and plain text. All templates share a simple dark-on-light HTML layout (most email clients handle light backgrounds better), a gold button for the main link, and the footer about email settings.
+Rendered in `convex/lib/emailTemplates.ts`, with a `zh` and an `en` version, each with subject, HTML and plain text. The layout is simple dark-on-light HTML (most email clients handle light backgrounds better), with a gold button that opens the 任务 page.
 
 | Template | Params | Subject (zh / en) |
 | --- | --- | --- |
-| `account_request` | `applicantName`, `departments` | 【CSSA Hub】新的注册申请 / New account request |
-| `preapproval_invite` | `departmentName`, `role`, `by`, `link` | 【CSSA Hub】你已被邀请加入{departmentName} / You've been invited to join {departmentName} |
-| `account_approved` | `name`, `departments` | 【CSSA Hub】你的账号已通过审批 / Your account is approved |
-| `account_rejected` | `name`, `reason` | 【CSSA Hub】注册申请未通过 / Account request not approved |
-| `assignment_new` | `title`, `by`, `dueAt`, `link` | 【CSSA Hub】新任务：{title} / New assignment: {title} |
-| `assignment_due_soon` | `title`, `dueAt`, `link` | 【CSSA Hub】任务即将截止：{title} / Due soon: {title} |
-| `assignment_overdue` | `title`, `dueAt`, `link` | 【CSSA Hub】任务已逾期：{title} / Overdue: {title} |
-| `submission_changes_requested` | `title`, `by`, `comment`, `link` | 【CSSA Hub】任务需要修改：{title} / Changes requested: {title} |
-| `creator_summary` | `items[]` | 【CSSA Hub】任务进度日报 / Daily assignment summary |
-| `mention_digest` | `items[]` | 【CSSA Hub】你有 {count} 条新提及 / You have {count} new mentions |
-| `announcement` | `channel`, `by`, `excerpt`, `link` | 【CSSA Hub】{channel} 新公告 / New announcement in {channel} |
+| `daily_digest` | `today[]`, `events[]`, `todos[]` | 【CSSA Hub】今日待办：{n} 项 / Today: {n} items, or 【CSSA Hub】每日摘要 / Daily summary when nothing is due today |
 
-Escape all user-provided values when building HTML.
+Each item has a title, chat name, kind (任务 / 活动), due date or time and place, and a link. Escape all user-provided values when building HTML.

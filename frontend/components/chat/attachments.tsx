@@ -1,30 +1,31 @@
 "use client";
 
-import { DownloadIcon, FileIcon, FileXIcon } from "lucide-react";
+import { DownloadIcon, FileIcon, FileXIcon, FolderDownIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useState } from "react";
+import { SaveToFilesDialog } from "@/components/files/file-dialogs";
 import { LIMITS } from "@/lib/api";
+import { formatBytes } from "@/lib/format";
 import type { Message } from "./types";
 
 type Attachment = Message["attachments"][number];
 
-export function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
+export { formatBytes };
 
 export function AttachmentList({ attachments }: { attachments: Attachment[] }) {
+  const [saving, setSaving] = useState<Attachment | null>(null);
   if (attachments.length === 0) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-2">
       {attachments.map((a) => (
-        <AttachmentItem key={a._id} attachment={a} />
+        <AttachmentItem key={a._id} attachment={a} onSave={() => setSaving(a)} />
       ))}
+      <SaveToFilesDialog attachment={saving} onClose={() => setSaving(null)} />
     </div>
   );
 }
 
-function AttachmentItem({ attachment }: { attachment: Attachment }) {
+function AttachmentItem({ attachment, onSave }: { attachment: Attachment; onSave: () => void }) {
   const t = useTranslations("chat");
   if (attachment.expired || !attachment.url) {
     return (
@@ -35,18 +36,32 @@ function AttachmentItem({ attachment }: { attachment: Attachment }) {
       </div>
     );
   }
+  const saveButton = (
+    <button
+      type="button"
+      onClick={onSave}
+      aria-label={t("saveToFiles")}
+      title={t("saveToFiles")}
+      className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+    >
+      <FolderDownIcon className="size-4" />
+    </button>
+  );
   if (attachment.isImage && attachment.thumbUrl) {
     return (
-      <a
-        href={attachment.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={t("openOriginal", { name: attachment.name, size: formatBytes(attachment.size) })}
-        className="block overflow-hidden rounded-md border border-border"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- static export, thumbnails come from Convex storage */}
-        <img src={attachment.thumbUrl} alt={attachment.name} className="max-h-48 max-w-64 object-cover" loading="lazy" />
-      </a>
+      <div className="group/attachment relative">
+        <a
+          href={attachment.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={t("openOriginal", { name: attachment.name, size: formatBytes(attachment.size) })}
+          className="block overflow-hidden rounded-md border border-border"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- static export, thumbnails come from Convex storage */}
+          <img src={attachment.thumbUrl} alt={attachment.name} className="max-h-48 max-w-64 object-cover" loading="lazy" />
+        </a>
+        <div className="absolute top-1 right-1 hidden rounded-md bg-popover/90 shadow-sm group-hover/attachment:block">{saveButton}</div>
+      </div>
     );
   }
   return (
@@ -58,6 +73,7 @@ function AttachmentItem({ attachment }: { attachment: Attachment }) {
           {formatBytes(attachment.size)} · {t("fileKeptDays", { days: LIMITS.attachmentRetentionDays })}
         </div>
       </div>
+      {saveButton}
       <a
         href={attachment.url}
         target="_blank"

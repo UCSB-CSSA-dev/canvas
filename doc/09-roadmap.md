@@ -469,45 +469,58 @@ Everyone else in the chat can **propose** one.
 
 ## Stage 3: Files, assignments, and email reminders (文件、任务、邮件提醒)
 
-**Goal:** the app replaces Google Drive and Canvas for CSSA work, and reminds people by email so nobody has to chase deadlines by hand.
+**Goal:** the app replaces Google Drive and Canvas for CSSA work: departments keep their files here, 部长 hand out tasks and organize events like 春晚 here, and everyone gets one morning email with what's on their plate.
 
-These three ship together because they depend on each other: assignment submissions use the file upload flow, and email reminders are mostly triggered by assignments. A sensible build order inside the stage is files, then assignments, then email.
+These ship together because they depend on each other: task files live in the department file spaces, and the email digest is built from tasks and events. Build order: files, then tasks and events, then the digest. The 文件 and 任务 tabs in the sidebar and the phone bottom bar stop being grayed out when their part ships.
 
-### Files ([features/files.md](features/files.md))
+Decisions for this stage (2026-10-22):
+- **Storage:** stay on the Convex free plan (1 GB total). 10 MB per file in Convex, a quota per space (default 75 MB, set by 主席团), and a usage card in the admin console. Bigger files (up to 500 MB), or uploads to a full space, go to the CSSA Google Drive (decided 2026-10-26).
+- **File spaces:** 公共 (everyone views, 主席团 edits), 主席团 (主席团 only), and one per department (everyone views; members upload and manage their own files; 部长 and 主席团 manage everything). No personal files, so no file oversight.
+- **Chat and Files:** chat attachments stay private and expire after 15 days. Files can be shared into chats as link cards, and attachments can be saved to Files.
+- **Tasks:** belong to a chat. 主席团 can assign anyone (in 全体); 部长 assign within their department's chat and in groups that involve their department. Publishing posts a card in the chat. Approve or request changes, no scores.
+- **Events:** a kind of task with a time, place and helpers, plus optional prep tasks.
+- **Email:** only a daily digest at 10:00 AM Pacific from a dedicated free Gmail account, to everyone with something open (no opt-out), at the sign-in email or an address set in Settings. No other emails.
 
-- [ ] Spaces: org shared, department, my files
-- [ ] Folder tree, breadcrumbs, list and grid views
-- [ ] Upload with progress, drag and drop, size and type checks
-- [ ] Previews for images, PDF, video, audio
-- [ ] Rename, move, delete, trash with restore, purge cron
-- [ ] "Save to Files" from chat attachments
-- [ ] File name search
-- [ ] Oversight access to personal files with audit logging
+### 3.1 Files ([features/files.md](features/files.md))
 
-### Assignments ([features/assignments.md](features/assignments.md))
+- [x] `fileSpaces`, `folders`, `files` tables; space access rules (`spaceAccess`)
+- [x] Files home with every visible space and its usage; folder view with breadcrumbs and a list (grid view not built yet)
+- [x] Upload with progress and drag and drop; 10 MB, blocked types and quota checked on the server; image thumbnails
+- [x] Google Drive overflow: files over 10 MB (up to 500 MB) or that don't fit the quota go to the CSSA Drive through the Apps Script; link-viewable, trashed on purge
+- [x] Previews for images, PDF, video, audio
+- [x] Rename, move, delete; trash with restore; daily purge cron (rejected uploads are deleted immediately, so no orphan cron)
+- [x] Share a file to a chat (link card), and save a chat attachment to Files (shared storage, cleanup checks both)
+- [x] File name search
+- [x] Admin storage card: total against 1 GB, each space (including its task files), chat attachments; editable quotas
+- [x] 文件 tab enabled in the sidebar and bottom bar
 
-- [ ] Create, draft, publish, close, reopen
-- [ ] Assign to people or a whole department
-- [ ] Assigned to me, assigned by me, and department views
-- [ ] Submissions (text, files, link, mark done), late flag
-- [ ] Review: approve, request changes, comment thread
-- [ ] In-app notifications for new assignments and reviews
+### 3.2 Tasks and events ([features/assignments.md](features/assignments.md))
 
-### Email reminders ([features/notifications-and-email.md](features/notifications-and-email.md))
+- [x] `assignments`, `assignmentSubmissions`, `assignmentComments` tables; `taskAccess`, `canCreateTaskIn`
+- [x] Create (task or event), draft, publish, edit, close, reopen; assign people or everyone in the chat
+- [x] Chat card (`kind: "task"`) that stays live; "发布任务" in the composer menu for those allowed
+- [x] 任务 page: 我的, 我发布的, 管理; task page for assignees, chat members and reviewers
+- [x] Submissions (text, files into the task's folder, link, mark done, auto-approve), late flag
+- [x] Review: approve, request changes, comment thread
+- [x] Events: time, place, helpers, prep tasks
+- [x] Collaborative markdown documents on tasks and events (live editing, markdown shortcuts, .md and PDF export)
+- [x] Notifications and pushes: new, updated, due soon, overdue, event soon, submission received, reviewed, comment
+- [x] 任务 tab enabled in the sidebar and bottom bar
 
-- [ ] Apps Script relay deployed ([06-email-apps-script.md](06-email-apps-script.md))
-- [ ] `emailJobs` outbox, send action, retry cron, quota pause, dry run in dev
-- [ ] Templates in `zh` and `en`
-- [ ] Emails: account approved or rejected, new account request, pre-approval invite, new assignment, due soon, overdue, changes requested, announcements
-- [ ] Daily mention digest and creator summary
-- [ ] Email preferences in Settings
-- [ ] Admin overview card for failed emails
+### 3.3 Daily digest email ([features/notifications-and-email.md](features/notifications-and-email.md#daily-digest))
+
+- [x] Apps Script relay on a dedicated Gmail account ([06-email-apps-script.md](06-email-apps-script.md))
+- [x] `emailJobs` outbox, send action, retry cron, quota skip, dry run in dev
+- [x] `daily_digest` template in zh and en: today, events in the next week, to-dos
+- [x] Hourly cron that sends at 10:00 AM Pacific, once per person per day, only when there's something to report
+- [x] Settings: "接收邮箱 / Send my digest to"
+- [x] Admin overview email card (today's sent, failed, skipped, last error)
 
 ### Exit criteria
 
-- [ ] A department moves its working files out of Google Drive.
-- [ ] Leads track a real event's task list end to end in the app, including file submissions and reviews.
-- [ ] Members get due-soon and overdue reminders by email without anyone sending them by hand.
+- [ ] A department moves its working files out of Google Drive, staying within its quota.
+- [ ] 部长 run a real event (helpers, time, place, prep tasks) end to end in the app, including file submissions and reviews.
+- [ ] Everyone with open tasks gets one digest every morning without anyone sending it by hand, and people with nothing get none.
 
 ## Stage 4: AI embedding (AI 功能) - TBA
 
@@ -535,6 +548,6 @@ Pick based on feedback:
 - [ ] Yearly handover flow in admin
 - [ ] Audit log CSV export
 - [ ] In-app documents (simple rich text pages) if decided in [open questions](10-open-questions.md)
-- [ ] Calendar view of assignment due dates
+- [ ] Calendar view of task due dates and events
 - [ ] Playwright end-to-end tests
 - [ ] Performance pass (message list virtualization, image thumbnails)

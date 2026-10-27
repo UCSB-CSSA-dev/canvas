@@ -37,6 +37,17 @@ const TEXT = {
     appApproved: "{reviewer} 批准了你的{kind}「{title}」",
     appRejected: "{reviewer} 拒绝了你的{kind}「{title}」",
     appDueSoon: "{kind}「{title}」即将截止，别忘了参与",
+    assignmentNew: "{actor} 给你安排了{kind}「{title}」",
+    assignmentUpdated: "{kind}「{title}」的时间或地点有变动",
+    assignmentDueSoon: "任务「{title}」将在 24 小时内截止",
+    assignmentOverdue: "任务「{title}」已逾期",
+    eventSoon: "活动「{title}」将在 24 小时内开始",
+    submissionReceived: "{actor} 提交了「{title}」",
+    submissionApproved: "{actor} 通过了你的「{title}」",
+    submissionChanges: "{actor} 请你修改「{title}」",
+    assignmentComment: "{actor} 评论了「{title}」",
+    task: "任务",
+    event: "活动",
     signup: "接龙",
     poll: "投票",
     meeting: "集会",
@@ -67,6 +78,17 @@ const TEXT = {
     appApproved: '{reviewer} approved your {kind} "{title}"',
     appRejected: '{reviewer} declined your {kind} "{title}"',
     appDueSoon: 'The {kind} "{title}" closes soon',
+    assignmentNew: '{actor} assigned you a {kind}: "{title}"',
+    assignmentUpdated: 'The time or place of the {kind} "{title}" changed',
+    assignmentDueSoon: 'The task "{title}" is due within 24 hours',
+    assignmentOverdue: 'The task "{title}" is overdue',
+    eventSoon: 'The event "{title}" starts within 24 hours',
+    submissionReceived: '{actor} submitted "{title}"',
+    submissionApproved: '{actor} approved your "{title}"',
+    submissionChanges: '{actor} requested changes on "{title}"',
+    assignmentComment: '{actor} commented on "{title}"',
+    task: "task",
+    event: "event",
     signup: "Sign-up",
     poll: "Poll",
     meeting: "Meeting",
@@ -101,6 +123,7 @@ export function pushText(input: PushInput, locale: PushLocale, lookup: PushLooku
   const name = String(params.name ?? "");
   const title = String(params.title ?? "");
   const kind = () => (params.kind === "signup" || params.kind === "poll" || params.kind === "meeting" ? text[params.kind] : "");
+  const taskKind = () => (params.kind === "event" ? text.event : text.task);
   const preview = typeof params.preview === "string" && params.preview ? params.preview : undefined;
   const note = typeof params.note === "string" && params.note ? params.note : undefined;
 
@@ -153,5 +176,24 @@ export function pushText(input: PushInput, locale: PushLocale, lookup: PushLooku
       return { title: t("appRejected", { reviewer: person("reviewerId"), kind: kind(), title }), body: note };
     case "app_due_soon":
       return { title: t("appDueSoon", { kind: kind(), title }) };
+    case "assignment_new":
+      return { title: t("assignmentNew", { actor: person("actorId"), kind: taskKind(), title }) };
+    case "assignment_updated":
+      return { title: t("assignmentUpdated", { kind: taskKind(), title }) };
+    case "assignment_due_soon":
+      return { title: t("assignmentDueSoon", { title }) };
+    case "assignment_overdue":
+      return { title: t("assignmentOverdue", { title }) };
+    case "event_soon":
+      return { title: t("eventSoon", { title }) };
+    case "submission_received":
+      return { title: t("submissionReceived", { actor: person("actorId"), title }) };
+    case "submission_reviewed":
+      return {
+        title: t(params.decision === "approve" ? "submissionApproved" : "submissionChanges", { actor: person("actorId"), title }),
+        body: note,
+      };
+    case "assignment_comment":
+      return { title: t("assignmentComment", { actor: person("actorId"), title }), body: preview };
   }
 }

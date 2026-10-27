@@ -58,7 +58,7 @@ The system admin's row is created as `approved`, but they still see the onboardi
 - The client passes the `hd=ucsb.edu` parameter so Google's account picker prefers UCSB accounts. **This hint is not security.**
 - Server check: in the Convex Auth `profile` / `createOrUpdateUser` callback, reject unless `email` ends with `@ucsb.edu` (case-insensitive) and Google reports the email as verified. The rejected user sees a translated error on `/sign-in`: "仅限 @ucsb.edu 邮箱登录 / Only @ucsb.edu accounts can sign in."
 - Always store and compare emails **lowercased**.
-- On first sign-in: create the user with `status = "new"`, `locale = "zh"` (updated by the language toggle), and default `emailPrefs` (all `true`), unless the first-account rule below applies.
+- On first sign-in: create the user with `status = "new"`, and `locale = "zh"` (updated by the language toggle), unless the first-account rule below applies.
 
 ## First account becomes system admin
 

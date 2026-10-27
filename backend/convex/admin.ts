@@ -2,8 +2,12 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
+import { appsScriptConfigured } from "./lib/appsScript";
+import { LIMITS } from "./lib/constants";
 import { appError } from "./lib/errors";
+import { spaceKey, spaceUsage } from "./lib/files";
 import { reviewableProposals } from "./lib/groups";
+import { pacificDay } from "./lib/time";
 import { requireAdmin, requireApproved } from "./lib/permissions";
 import { getUserSummaries, type UserSummary } from "./lib/users";
 
@@ -66,11 +70,74 @@ export const overview = query({
       });
     }
 
-    let storage: { bytes: number; files: number } | null = null;
+    let storage: StorageOverview | null = null;
+    let tasks: { open: number; overdue: number } | null = null;
+    let email: EmailOverview | null = null;
     let unassigned: number | null = null;
     if (viewer.isAdmin) {
+      const now = Date.now();
       const files = await ctx.db.system.query("_storage").collect();
-      storage = { bytes: files.reduce((sum, f) => sum + f.size, 0), files: files.length };
+      const spaces: StorageOverview["spaces"] = [];
+      const allDepartments = (await ctx.db.query("departments").collect()).sort((a, b) => a.sortOrder - b.sortOrder);
+      for (const department of [null, ...allDepartments]) {
+        const usage = await spaceUsage(ctx, department?._id);
+        if (department?.archivedAt && usage.usedBytes === 0) continue;
+        spaces.push({
+          key: spaceKey(department),
+          nameZh: department?.nameZh ?? null,
+          nameEn: department?.nameEn ?? null,
+          archived: Boolean(department?.archivedAt),
+          usedBytes: usage.usedBytes,
+          quotaBytes: usage.quotaBytes,
+        });
+      }
+      const attachments = (await ctx.db.query("attachments").collect()).filter((a) => !a.expiredAt);
+      const driveFiles = (await ctx.db.query("files").collect()).filter((f) => f.driveFileId);
+      storage = {
+        driveFiles: driveFiles.length,
+        driveBytes: driveFiles.reduce((sum, f) => sum + f.size, 0),
+        bytes: files.reduce((sum, f) => sum + f.size, 0),
+        files: files.length,
+        spaces,
+        attachmentBytes: attachments.reduce((sum, a) => sum + a.size, 0),
+        capBytes: LIMITS.storageCapBytes,
+        warnBytes: LIMITS.quotaWarnBytes,
+      };
+
+      const open = await ctx.db
+        .query("assignments")
+        .withIndex("by_status_due", (q) => q.eq("status", "open"))
+        .collect();
+      let overdue = 0;
+      for (const assignment of open) {
+        if (assignment.kind !== "task" || assignment.dueAt === undefined || assignment.dueAt >= now) continue;
+        const rows = await ctx.db
+          .query("assignmentSubmissions")
+          .withIndex("by_assignment", (q) => q.eq("assignmentId", assignment._id))
+          .collect();
+        overdue += rows.filter((r) => r.status === "assigned" || r.status === "changes_requested").length;
+      }
+      tasks = { open: open.length, overdue };
+
+      const day = pacificDay(now);
+      const jobs = await ctx.db
+        .query("emailJobs")
+        .withIndex("by_day", (q) => q.eq("day", day))
+        .collect();
+      const count = (status: string) => jobs.filter((j) => j.status === status).length;
+      const lastProblem = jobs
+        .filter((j) => (j.status === "failed" || j.status === "skipped") && j.lastError)
+        .sort((a, b) => b._creationTime - a._creationTime)[0];
+      email = {
+        day,
+        sent: count("sent"),
+        pending: count("queued") + count("sending"),
+        failed: count("failed"),
+        skipped: count("skipped"),
+        lastError: lastProblem?.lastError ?? null,
+        configured: appsScriptConfigured(),
+        dryRun: process.env.EMAIL_DRY_RUN === "true",
+      };
       const anyMembership = new Set(
         (await ctx.db.query("departmentMemberships").collect())
           .filter((m) => departments.some((d) => d._id === m.departmentId))
@@ -89,9 +156,41 @@ export const overview = query({
       unassigned,
       perDepartment,
       storage,
+      tasks,
+      email,
     };
   },
 });
+
+export type StorageOverview = {
+  bytes: number;
+  files: number;
+  spaces: {
+    key: string;
+    nameZh: string | null;
+    nameEn: string | null;
+    archived: boolean;
+    usedBytes: number;
+    quotaBytes: number;
+  }[];
+  attachmentBytes: number;
+  capBytes: number;
+  warnBytes: number;
+  /** Files kept in Google Drive (not part of the Convex cap or space quotas). */
+  driveFiles: number;
+  driveBytes: number;
+};
+
+export type EmailOverview = {
+  day: string;
+  sent: number;
+  pending: number;
+  failed: number;
+  skipped: number;
+  lastError: string | null;
+  configured: boolean;
+  dryRun: boolean;
+};
 
 export type AuditEntryView = {
   _id: Id<"auditLogs">;

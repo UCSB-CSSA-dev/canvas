@@ -1,6 +1,9 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+import { PUBLIC_SPACE } from "./constants";
 import { messageState, type MessageState } from "./messages";
+import { buildViewerContext } from "./permissions";
+import { eventEnd } from "./tasks";
 import { MENTION_PATTERN } from "./text";
 import { getUserSummaries, type UserSummary } from "./users";
 
@@ -50,10 +53,40 @@ export type ReplyView = {
   state: MessageState | "missing";
 };
 
+/** A file shared from Files. `canView` is false only for 主席团 files seen by others. */
+export type SharedFileView = {
+  _id: Id<"files">;
+  name: string;
+  size: number;
+  contentType: string;
+  spaceKey: string;
+  spaceNameZh: string;
+  spaceNameEn: string;
+  deleted: boolean;
+  canView: boolean;
+};
+
+export type TaskCardView = {
+  _id: Id<"assignments">;
+  kind: "task" | "event";
+  title: string;
+  status: Doc<"assignments">["status"];
+  dueAt?: number;
+  startAt?: number;
+  endAt?: number;
+  location?: string;
+  requiresSubmission: boolean;
+  assigneeCount: number;
+  /** Submitted or approved (tasks). */
+  doneCount: number;
+  myStatus: Doc<"assignmentSubmissions">["status"] | null;
+  ended: boolean;
+};
+
 export type MessageView = {
   _id: Id<"messages">;
   _creationTime: number;
-  kind: "user" | "system" | "forward";
+  kind: "user" | "system" | "forward" | "task";
   authorId: Id<"users">;
   body: string;
   state: MessageState;
@@ -65,6 +98,9 @@ export type MessageView = {
   attachments: AttachmentView[];
   system?: { event: string; params: Record<string, unknown> };
   forward?: ForwardView;
+  files: SharedFileView[];
+  /** kind "task": the live card; null when the task was deleted. */
+  task?: TaskCardView | null;
   /** Every user referenced by this message (author, mentions, reactions, system params, forwards). */
   people: UserSummary[];
   /** Departments referenced by system params. */
@@ -121,11 +157,85 @@ async function forwardView(
   return { source: snapshot.source, items };
 }
 
+async function sharedFileViews(
+  ctx: QueryCtx,
+  fileIds: Id<"files">[],
+  isAdmin: () => Promise<boolean>,
+): Promise<SharedFileView[]> {
+  const views: SharedFileView[] = [];
+  for (const fileId of fileIds) {
+    const file = await ctx.db.get("files", fileId);
+    if (!file) {
+      views.push({
+        _id: fileId,
+        name: "",
+        size: 0,
+        contentType: "",
+        spaceKey: "",
+        spaceNameZh: "",
+        spaceNameEn: "",
+        deleted: true,
+        canView: false,
+      });
+      continue;
+    }
+    const department = file.departmentId ? await ctx.db.get("departments", file.departmentId) : null;
+    views.push({
+      _id: file._id,
+      name: file.name,
+      size: file.size,
+      contentType: file.contentType,
+      spaceKey: department?.slug ?? PUBLIC_SPACE,
+      spaceNameZh: department?.nameZh ?? "公共",
+      spaceNameEn: department?.nameEn ?? "Public",
+      deleted: file.deletedAt !== undefined,
+      canView: department?.kind === "presidium" ? await isAdmin() : true,
+    });
+  }
+  return views;
+}
+
+export async function taskCard(
+  ctx: QueryCtx,
+  assignmentId: Id<"assignments">,
+  viewerId: Id<"users">,
+): Promise<TaskCardView | null> {
+  const assignment = await ctx.db.get("assignments", assignmentId);
+  if (!assignment) return null;
+  const rows = await ctx.db
+    .query("assignmentSubmissions")
+    .withIndex("by_assignment", (q) => q.eq("assignmentId", assignment._id))
+    .collect();
+  return {
+    _id: assignment._id,
+    kind: assignment.kind,
+    title: assignment.title,
+    status: assignment.status,
+    dueAt: assignment.dueAt,
+    startAt: assignment.startAt,
+    endAt: assignment.endAt,
+    location: assignment.location,
+    requiresSubmission: assignment.requiresSubmission,
+    assigneeCount: rows.length,
+    doneCount: rows.filter((r) => r.status === "submitted" || r.status === "approved").length,
+    myStatus: rows.find((r) => r.assigneeId === viewerId)?.status ?? null,
+    ended: assignment.kind === "event" && eventEnd(assignment) <= Date.now(),
+  };
+}
+
 export async function toMessageViews(
   ctx: QueryCtx,
   viewerId: Id<"users">,
   messages: Doc<"messages">[],
 ): Promise<MessageView[]> {
+  let adminCache: boolean | null = null;
+  const isAdmin = async () => {
+    if (adminCache === null) {
+      const user = await ctx.db.get("users", viewerId);
+      adminCache = user ? (await buildViewerContext(ctx, user)).isAdmin : false;
+    }
+    return adminCache;
+  };
   const views: MessageView[] = [];
   for (const message of messages) {
     const people = new Set<string>([message.authorId]);
@@ -211,6 +321,8 @@ export async function toMessageViews(
       attachments: await attachmentViews(ctx, attachmentRows),
       system,
       forward,
+      files: state === "normal" ? await sharedFileViews(ctx, message.fileIds ?? [], isAdmin) : [],
+      task: message.assignmentId ? await taskCard(ctx, message.assignmentId, viewerId) : undefined,
       people: [...summaries.values()],
       departments,
     });

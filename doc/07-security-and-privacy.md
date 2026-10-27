@@ -9,7 +9,7 @@
 | Wrong person pre-approved (typo in email) | Pre-approvals only match the exact verified email; unclaimed ones are visible on the roster and can be revoked |
 | A member reading content they shouldn't | Server-side permission checks in every Convex function ([02-roles-and-permissions.md](02-roles-and-permissions.md)) |
 | Abuse of oversight power | Oversight is read-only, disclosed at signup, and every use is audit logged; only presidium can read the log |
-| Leaked file links | Download URLs are only issued after a permission check; files are never listed publicly |
+| Leaked file links | Download URLs are only issued after a permission check; files are never listed publicly. Files in Google Drive (over 10 MB, or uploaded to a full space) are viewable by anyone with the link, so a copied link keeps working; keep sensitive large files out of the Hub |
 | Email relay abuse | Shared secret on the Apps Script; secret only in Convex environment variables |
 | XSS through messages or file names | Render user content as text or sanitized markdown; never inject raw HTML |
 | Former members keeping access | Deactivation blocks every function immediately; yearly handover flow |
@@ -27,7 +27,7 @@
 2. Load the target document, return `NOT_FOUND` if missing **or** if the viewer cannot read it (don't reveal existence).
 3. Check the specific action with a helper (`channelAccess` flags such as `canPost` or `canModerate`, `canWriteFolder`, ...). Throw `FORBIDDEN` when it fails, or `READ_ONLY` for read-only chats.
 4. When access is granted through oversight, write an audit log entry (from a mutation; queries can't write).
-5. Validate all arguments with Convex validators (`v.*`). Validate lengths and limits (message 4,000 characters, title 120, chat attachment 15 MB, Files 25 MB). Limits live in `LIMITS` in `convex/lib/constants.ts`.
+5. Validate all arguments with Convex validators (`v.*`). Validate lengths and limits (message 4,000 characters, title 120, chat attachment 15 MB, Files 10 MB in Convex and 500 MB in Google Drive). Limits live in `LIMITS` in `convex/lib/constants.ts`.
 6. Never accept a `userId` argument to mean "act as this user". The acting user always comes from `ctx.auth`.
 7. Use `internalMutation` / `internalAction` for anything the client must not call directly (email, notification fan-out, crons, seed).
 
@@ -92,7 +92,7 @@ These are inlined into the static bundle at build time, so they must never hold 
   - Notifications: read ones are deleted after 90 days.
   - Email jobs: 30 days after sending.
   - Audit logs: kept indefinitely (at least 2 years).
-- **Leaving CSSA.** Deactivated users' content stays for organizational continuity. A user can ask presidium to delete their personal files; presidium can do this through the admin console (logged).
+- **Leaving CSSA.** Deactivated users' content stays for organizational continuity. A user can ask presidium to delete files they uploaded; presidium can delete them from Files.
 - No analytics or third-party trackers in v1.
 
 ## Operational checklist before launch

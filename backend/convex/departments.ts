@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { logAudit } from "./lib/audit";
-import { LIMITS } from "./lib/constants";
+import { LIMITS, PUBLIC_SPACE } from "./lib/constants";
 import { createDepartmentWithChannel, listActiveDepartments, slugify } from "./lib/departments";
 import { appError } from "./lib/errors";
 import { trackLeadership } from "./lib/groups";
@@ -44,7 +44,7 @@ export const create = mutation({
         .query("departments")
         .withIndex("by_slug", (q) => q.eq("slug", slug))
         .first();
-      if (!taken) break;
+      if (!taken && slug !== PUBLIC_SPACE) break;
       slug = `${base}-${i}`;
     }
 

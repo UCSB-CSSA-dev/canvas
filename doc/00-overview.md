@@ -60,8 +60,9 @@ Use these terms consistently in code, UI, and docs.
 | 私信 | Direct message | `channel` with `type: "dm"` | One-on-one chat |
 | 公告 | Announcement | `message` with `announcement: true` | Posted in 全体 by admins or in a department chat by its 部长; highlighted until each reader taps 知道了 |
 | 文件 | Files | `file` / `folder` | Uploaded files and folder tree |
-| 任务 | Assignment | `assignment` | A task given to one or more users |
-| 提交 | Submission | `assignmentSubmission` | An assignee's response to an assignment |
+| 任务 | Task | `assignment` with `kind: "task"` | Work given to one or more people, posted in a chat |
+| 活动 | Event | `assignment` with `kind: "event"` | An event (e.g. 春晚) with a time, place and helpers |
+| 提交 | Submission | `assignmentSubmission` | An assignee's response to a task |
 | 审批 | Approval | `status: "approved"` | Admin approval of a new account |
 | 监督查看 | Oversight view | `oversight` | An admin reading content they are not a participant in |
 | 审计日志 | Audit log | `auditLog` | Record of privileged actions |
@@ -82,9 +83,10 @@ flowchart TB
   Chat --> Groups[Group chats]
   Chat --> DMs[Direct messages]
   Chat --> Announcements[Announcements]
-  Files --> DeptFolders[Department folders]
-  Files --> OrgShared[Org-wide shared]
-  Files --> MyFiles[My files]
+  Files --> DeptFolders[Department spaces]
+  Files --> OrgShared[公共 Public]
+  Files --> Presidium[主席团 space]
+  Assignments --> Events[Events with helpers]
   Assignments --> Assign[Assign and track]
   Assignments --> Submit[Submit and review]
   Roster --> Approvals[Account approvals]

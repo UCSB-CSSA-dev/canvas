@@ -2,8 +2,10 @@
 
 import { useMutation, useQuery } from "convex/react";
 import {
+  ClipboardListIcon,
   EyeIcon,
   FileIcon,
+  FolderIcon,
   LoaderIcon,
   LockIcon,
   MegaphoneIcon,
@@ -11,8 +13,10 @@ import {
   PencilIcon,
   ReplyIcon,
   SendIcon,
+  UploadIcon,
   XIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import {
   useEffect,
@@ -25,9 +29,17 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
+import { useViewer } from "@/components/auth/account-state";
+import { FilePickerDialog } from "@/components/files/file-dialogs";
 import { PersonAvatar } from "@/components/people/person-avatar";
 import { matchesPerson } from "@/components/people/use-people";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api, LIMITS, mentionToken, type Id } from "@/lib/api";
@@ -109,9 +121,18 @@ function Editor({ name }: { name: string }) {
   const showError = useErrorToast();
   const preview = usePlainPreview();
 
+  const viewer = useViewer();
+  const canManageTasks =
+    (viewer.isAdmin || viewer.ledDepartmentIds.length > 0) &&
+    (channel.type === "org" || channel.type === "department" || channel.type === "group");
+  const creatable = useQuery(api.assignments.creatableChannels, canManageTasks ? {} : "skip");
+  const canCreateTask = creatable?.some((c) => c._id === channel._id) ?? false;
+
   const [body, setBody] = useState("");
   const [mentions, setMentions] = useState<MentionMap>(new Map());
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const [sharedFiles, setSharedFiles] = useState<{ _id: Id<"files">; name: string }[]>([]);
+  const [pickingFiles, setPickingFiles] = useState(false);
   const [announce, setAnnounce] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -161,7 +182,8 @@ function Editor({ name }: { name: string }) {
   const readyIds = uploads.flatMap((u) => (u.attachmentId ? [u.attachmentId] : []));
   const encoded = encodeMentions(body, mentions).trim();
   const tooLong = encoded.length > LIMITS.messageBody;
-  const canSend = !uploading && !tooLong && (encoded.length > 0 || (!editing && readyIds.length > 0));
+  const canSend =
+    !uploading && !tooLong && (encoded.length > 0 || (!editing && (readyIds.length > 0 || sharedFiles.length > 0)));
   const announcing = announce && !editing && channel.access.canAnnounce;
   const placeholder = t(announcing ? "announcementPlaceholder" : "messagePlaceholder", { name });
 
@@ -182,9 +204,10 @@ function Editor({ name }: { name: string }) {
       }
       return;
     }
-    const snapshot = { body, mentions, uploads, replyTo, announcing };
+    const snapshot = { body, mentions, uploads, sharedFiles, replyTo, announcing };
     resetDraft();
     setUploads([]);
+    setSharedFiles([]);
     setReplyTo(null);
     setAnnounce(false);
     try {
@@ -193,12 +216,14 @@ function Editor({ name }: { name: string }) {
         body: encoded,
         replyToId: snapshot.replyTo?._id,
         attachmentIds: readyIds.length ? readyIds : undefined,
+        fileIds: snapshot.sharedFiles.length ? snapshot.sharedFiles.map((f) => f._id) : undefined,
         announcement: snapshot.announcing || undefined,
       });
     } catch (error) {
       setBody(snapshot.body);
       setMentions(snapshot.mentions);
       setUploads(snapshot.uploads);
+      setSharedFiles(snapshot.sharedFiles);
       setReplyTo(snapshot.replyTo);
       setAnnounce(snapshot.announcing);
       showError(error);
@@ -374,6 +399,28 @@ function Editor({ name }: { name: string }) {
         </div>
       ) : null}
 
+      {sharedFiles.length > 0 ? (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {sharedFiles.map((f) => (
+            <div
+              key={f._id}
+              className="relative flex items-center gap-2 rounded-md border border-primary/40 bg-primary/5 py-1.5 pr-7 pl-2 text-xs"
+            >
+              <FolderIcon className="size-4 text-primary" />
+              <span className="max-w-40 truncate">{f.name}</span>
+              <button
+                type="button"
+                aria-label={t("removeFile")}
+                onClick={() => setSharedFiles((list) => list.filter((x) => x._id !== f._id))}
+                className="absolute top-1 right-1 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {uploads.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-2">
           {uploads.map((u) => (
@@ -408,9 +455,46 @@ function Editor({ name }: { name: string }) {
         {!editing ? (
           <>
             <input ref={fileRef} type="file" multiple hidden onChange={onFileInput} />
-            <Button size="icon-lg" variant="ghost" aria-label={t("attach")} onClick={() => fileRef.current?.click()}>
-              <PaperclipIcon />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon-lg" variant="ghost" aria-label={t("attach")}>
+                  <PaperclipIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top">
+                <DropdownMenuItem onSelect={() => fileRef.current?.click()}>
+                  <UploadIcon />
+                  {t("attachUpload", { days: LIMITS.attachmentRetentionDays })}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setPickingFiles(true)}>
+                  <FolderIcon />
+                  {t("attachFromFiles")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <FilePickerDialog
+              open={pickingFiles}
+              max={LIMITS.sharedFilesPerMessage - sharedFiles.length}
+              onClose={() => setPickingFiles(false)}
+              onPick={(files) =>
+                setSharedFiles((list) => [
+                  ...list,
+                  ...files.filter((f) => !list.some((x) => x._id === f._id)).map((f) => ({ _id: f._id, name: f.name })),
+                ])
+              }
+            />
+            {canCreateTask ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button asChild size="icon-lg" variant="ghost" aria-label={t("newTask")}>
+                    <Link href={`/assignments/new/?c=${channel._id}`}>
+                      <ClipboardListIcon />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t("newTask")}</TooltipContent>
+              </Tooltip>
+            ) : null}
             {channel.access.canAnnounce ? (
               <Tooltip>
                 <TooltipTrigger asChild>

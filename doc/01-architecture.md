@@ -114,12 +114,14 @@ Paths are relative to `backend/`. Stage 1 implements everything up to `channels.
 | `convex/messages.ts` | List (paginated), send, edit, delete, react |
 | `convex/files.ts` | Upload URL, save metadata, list folder, rename, move, delete, download URL |
 | `convex/folders.ts` | Folder tree CRUD |
+| `convex/drive.ts`, `lib/appsScript.ts` | Large files in Google Drive through the Apps Script (see [files.md](features/files.md#google-drive)) |
 | `convex/assignments.ts` | Create, update, list, submit, review |
+| `convex/documents.ts`, `convex/prosemirror.ts`, `lib/documents.ts`, `convex.config.ts` | Collaborative markdown documents on tasks, using the `@convex-dev/prosemirror-sync` component (see [assignments.md](features/assignments.md#documents)). Frontend side: `components/docs/` |
 | `convex/notifications.ts` | Create (internal), list, mark read |
 | `convex/push.ts`, `convex/pushNode.ts`, `lib/push.ts`, `lib/pushText.ts` | Web Push: device subscriptions, VAPID config, scheduling, and the Node action that sends localized pushes (see [notifications-and-email.md](features/notifications-and-email.md#push-notifications)). Frontend side: `public/sw.js`, `app/manifest.ts`, `lib/push.ts` |
 | `convex/email.ts` | Enqueue email job (internal mutation), send (internal action), retry |
 | `convex/audit.ts` | Audit log queries (presidium only) |
-| `convex/crons.ts` | Due-soon reminders, email retry, daily digest |
+| `convex/crons.ts` | Due-soon reminders, email retry, daily digest, trash purge, unfinished Drive uploads |
 | `convex/http.ts` | Convex Auth HTTP routes |
 
 Public functions are the only entry points from the client. Anything triggered by the system (notifications, email, crons) is an `internalMutation` or `internalAction`.

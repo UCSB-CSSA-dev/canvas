@@ -69,8 +69,6 @@ Notes:
 | Content | Overseer can |
 | --- | --- |
 | Channels the subject participates in (group chats, DMs, department channels) | Read messages and attachments (read-only) |
-| Files the subject uploaded, including "My files" | Read and download |
-| Assignments and submissions the subject is involved in | Read |
 | Subject's profile and memberships | Read |
 
 Oversight is **read-only**. An overseer cannot post as, edit, or delete the subject's content through oversight. Moderation (deleting content) is a separate permission described below.
@@ -88,8 +86,8 @@ Oversight is **read-only**. An overseer cannot post as, edit, or delete the subj
 Every oversight access writes an `auditLogs` row (see [03-data-model.md](03-data-model.md#auditlogs)):
 
 - Opening a channel through oversight: `action = "oversight.channel.open"` (one row per open, not per message).
-- Downloading another user's private file through oversight: `action = "oversight.file.download"`.
-- Viewing another user's assignment submission through oversight: `action = "oversight.submission.view"`.
+
+Files and tasks have no oversight: there are no personal files, and task submissions are visible to the task's reviewers as part of their normal role (see [Tasks and events](#tasks-and-events)).
 
 Other privileged actions are logged too: approvals, rejections, deactivations, role changes, and moderation deletes. Only presidium can read the audit log.
 
@@ -125,9 +123,9 @@ channelAccess(ctx, viewer, channel): Promise<ChannelAccess | null>
 requireChannelAccess(ctx, viewer, channelId): Promise<{ channel, access }>
 
 // later stages
-canReadFolder / canWriteFolder(ctx, viewer, folder): Promise<boolean>
-canReadFile(ctx, viewer, file): Promise<{ allowed: boolean; via: "access" | "oversight" | null }>
-canManageAssignment(ctx, viewer, assignment): Promise<boolean>
+spaceAccess(viewer, space): { view, upload, manage }   // space = "public" | department
+taskAccess(ctx, viewer, assignment): Promise<{ view, assignee, review } | null>
+canCreateTaskIn(ctx, viewer, channel): Promise<boolean>
 ```
 
 Rules for agents:
@@ -186,28 +184,33 @@ Implemented by `channelAccess` in `backend/convex/lib/channels.ts`. Through over
 
 ### Files
 
-| Action | Presidium | Lead | Member |
-| --- | --- | --- | --- |
-| Read org-wide shared folder | Y | Y | Y |
-| Write org-wide shared folder | Y | N | N |
-| Read department folders | Y | Own depts | Own depts |
-| Upload into department folders | Y | Own depts | Own depts |
-| Create, rename, move, delete folders in a department | Y | Dept | N |
-| Rename or delete own files | Y | Y | Y |
-| Delete others' files in a department | Y | Dept | N |
-| Read another user's "My files" | O | O for members they oversee | N |
-
-### Assignments
+There are no personal files, so files have no oversight. Details: [features/files.md](features/files.md#spaces).
 
 | Action | Presidium | Lead | Member |
 | --- | --- | --- | --- |
-| Create assignment | Y (anyone) | Dept (assignees must be members of a department they lead) | N |
-| Edit or close own assignments | Y | Y | N |
-| Edit or close others' assignments | Y | Dept | N |
-| View assignments assigned to me | Y | Y | Y |
-| Submit work on my assignment | Y | Y | Y |
-| Review submissions (approve / request changes) | Y | Own assignments and Dept | N |
-| View others' assignments and submissions | O | O for members they oversee | N |
+| View 公共 and every department space | Y | Y | Y |
+| View the 主席团 space | Y | N | N |
+| Upload to 公共 or the 主席团 space | Y | N | N |
+| Upload to a department space | Y | Own depts | Own depts |
+| Rename, move or delete own files | Y | Y | Y |
+| Folders, others' files, trash in a department space | Y | Dept | N |
+| Upload into a task's folder | Y | As an assignee or reviewer | As an assignee |
+| Change a space's storage quota | Y | N | N |
+| Share a file to a chat, save a chat attachment to Files | Y | Y | Y (into spaces they can upload to) |
+
+### Tasks and events
+
+A task belongs to one chat. Details: [features/assignments.md](features/assignments.md#who-can-create-and-for-whom).
+
+| Action | Presidium | Lead | Member |
+| --- | --- | --- | --- |
+| Create in 全体 (assign anyone) | Y | N | N |
+| Create in a department chat (assign its members) | Y | Dept | N |
+| Create in a group chat (assign its members) | Y if in the group | If the group involves a department they lead | N |
+| Edit, close, reopen, review | Y | Tasks in chats they could create in | N |
+| See a task posted in their chat (no submissions) | Y | Y | Y |
+| Submit, mark done, comment on own submission | Y | Y | Y |
+| See all submissions and comments on a task | Y | Tasks in chats they could create in | N |
 
 ## Signup disclosure (必须同意)
 

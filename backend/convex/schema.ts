@@ -3,7 +3,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { NOTIFICATION_TYPES } from "./lib/constants";
 
-// Stage 1 and 2 tables. See doc/03-data-model.md for the full target schema.
+// Stage 1 to 3 tables. See doc/03-data-model.md for the full target schema.
 
 export const userStatus = v.union(
   v.literal("new"),
@@ -60,6 +60,8 @@ export default defineSchema({
     reviewedAt: v.optional(v.number()),
     rejectionReason: v.optional(v.string()),
     locale: v.optional(locale),
+    /** Daily digest address; unset sends to the sign-in email. */
+    digestEmail: v.optional(v.string()),
   })
     .index("email", ["email"])
     .index("by_status", ["status"])
@@ -199,7 +201,7 @@ export default defineSchema({
     channelId: v.id("channels"),
     authorId: v.id("users"),
     body: v.string(),
-    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"))),
+    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"), v.literal("task"))),
     mentionUserIds: v.optional(v.array(v.id("users"))),
     mentionAll: v.optional(v.boolean()),
     replyToId: v.optional(v.id("messages")),
@@ -215,6 +217,10 @@ export default defineSchema({
     system: v.optional(v.object({ event: v.string(), params: v.any() })),
     /** kind "forward": snapshot of the forwarded messages. */
     forward: v.optional(v.any()),
+    /** kind "task": the task or event this card shows. */
+    assignmentId: v.optional(v.id("assignments")),
+    /** Files shared from Files, shown as link cards. */
+    fileIds: v.optional(v.array(v.id("files"))),
   })
     .index("by_channel", ["channelId"])
     .index("by_channel_announcement", ["channelId", "announcement"])
@@ -248,7 +254,167 @@ export default defineSchema({
     expiredAt: v.optional(v.number()),
   })
     .index("by_message", ["messageId"])
-    .index("by_expiry", ["expiredAt", "expiresAt"]),
+    .index("by_expiry", ["expiredAt", "expiresAt"])
+    .index("by_storage", ["storageId"]),
+
+  /** One per file space: departmentId unset is 公共; the presidium department is 主席团. */
+  fileSpaces: defineTable({
+    departmentId: v.optional(v.id("departments")),
+    quotaBytes: v.number(),
+    /** Includes trashed files until they're purged. */
+    usedBytes: v.number(),
+  }).index("by_department", ["departmentId"]),
+
+  folders: defineTable({
+    name: v.string(),
+    /** The space; unset is 公共. */
+    departmentId: v.optional(v.id("departments")),
+    /** Unset is the top level of the space. */
+    parentId: v.optional(v.id("folders")),
+    /** The automatic "任务 Tasks / <title>" folder of a task. */
+    assignmentId: v.optional(v.id("assignments")),
+    /** The automatic "任务 Tasks" parent folder of a space's task folders. */
+    tasksRoot: v.optional(v.boolean()),
+    createdBy: v.id("users"),
+    deletedAt: v.optional(v.number()),
+    deletedBy: v.optional(v.id("users")),
+  })
+    .index("by_space_parent", ["departmentId", "parentId"])
+    .index("by_assignment", ["assignmentId"])
+    .index("by_deletedAt", ["deletedAt"]),
+
+  files: defineTable({
+    /** May be shared with a chat attachment (Save to Files). Unset for files kept in Google Drive. */
+    storageId: v.optional(v.id("_storage")),
+    /** Files over 10 MB, or uploaded when the space was full, live in the CSSA Google Drive. */
+    driveFileId: v.optional(v.string()),
+    thumbStorageId: v.optional(v.id("_storage")),
+    name: v.string(),
+    contentType: v.string(),
+    size: v.number(),
+    /** The space, copied from the folder; files never move between spaces. */
+    departmentId: v.optional(v.id("departments")),
+    folderId: v.optional(v.id("folders")),
+    uploadedBy: v.id("users"),
+    deletedAt: v.optional(v.number()),
+    deletedBy: v.optional(v.id("users")),
+  })
+    .index("by_space_folder", ["departmentId", "folderId"])
+    .index("by_storage", ["storageId"])
+    .index("by_deletedAt", ["deletedAt"]),
+
+  /** A Google Drive upload between `drive.startUpload` and `drive.finishUpload`. */
+  driveUploads: defineTable({
+    userId: v.id("users"),
+    space: v.optional(v.string()),
+    folderId: v.optional(v.id("folders")),
+    assignmentId: v.optional(v.id("assignments")),
+    name: v.string(),
+    size: v.number(),
+    contentType: v.string(),
+    /** Drive folder (under "CSSA Hub Files") the file goes in: the space key. */
+    driveFolder: v.string(),
+  }),
+
+  /** Collaborative markdown documents of a task or event; content lives in the prosemirrorSync component. */
+  documents: defineTable({
+    assignmentId: v.id("assignments"),
+    title: v.string(),
+    createdBy: v.id("users"),
+    updatedAt: v.number(),
+    updatedBy: v.id("users"),
+  }).index("by_assignment", ["assignmentId"]),
+
+  /** Tasks and events (UI: 任务 / 活动). */
+  assignments: defineTable({
+    kind: v.union(v.literal("task"), v.literal("event")),
+    title: v.string(),
+    description: v.optional(v.string()),
+    createdBy: v.id("users"),
+    /** 全体, a department chat or a group chat; decides who can create and who can be assigned. */
+    channelId: v.id("channels"),
+    /** File space for the task's files; unset is 公共. */
+    departmentId: v.optional(v.id("departments")),
+    /** A prep task of this event. */
+    eventId: v.optional(v.id("assignments")),
+    status: v.union(v.literal("draft"), v.literal("open"), v.literal("closed")),
+    dueAt: v.optional(v.number()),
+    startAt: v.optional(v.number()),
+    endAt: v.optional(v.number()),
+    location: v.optional(v.string()),
+    requiresSubmission: v.boolean(),
+    autoApprove: v.optional(v.boolean()),
+    fileIds: v.array(v.id("files")),
+    /** Drafts: who will be assigned on publish. */
+    draftAssigneeIds: v.optional(v.array(v.id("users"))),
+    /** Drafts: assign everyone in the chat on publish. */
+    draftEveryone: v.optional(v.boolean()),
+    messageId: v.optional(v.id("messages")),
+    publishedAt: v.optional(v.number()),
+    closedAt: v.optional(v.number()),
+  })
+    .index("by_creator", ["createdBy"])
+    .index("by_channel", ["channelId"])
+    .index("by_event", ["eventId"])
+    .index("by_status_due", ["status", "dueAt"])
+    .index("by_status_start", ["status", "startAt"]),
+
+  /** One per assignee (or event helper), created on publish. */
+  assignmentSubmissions: defineTable({
+    assignmentId: v.id("assignments"),
+    assigneeId: v.id("users"),
+    status: v.union(
+      v.literal("assigned"),
+      v.literal("submitted"),
+      v.literal("changes_requested"),
+      v.literal("approved"),
+    ),
+    text: v.optional(v.string()),
+    fileIds: v.array(v.id("files")),
+    link: v.optional(v.string()),
+    submittedAt: v.optional(v.number()),
+    late: v.optional(v.boolean()),
+    reviewedBy: v.optional(v.id("users")),
+    reviewedAt: v.optional(v.number()),
+    /** Due soon (tasks) or event soon (events). */
+    dueSoonReminderSentAt: v.optional(v.number()),
+    overdueReminderSentAt: v.optional(v.number()),
+  })
+    .index("by_assignment", ["assignmentId"])
+    .index("by_assignee", ["assigneeId"])
+    .index("by_assignment_assignee", ["assignmentId", "assigneeId"]),
+
+  assignmentComments: defineTable({
+    submissionId: v.id("assignmentSubmissions"),
+    authorId: v.id("users"),
+    body: v.string(),
+  }).index("by_submission", ["submissionId"]),
+
+  /** Outbox for the daily digest; see doc/features/notifications-and-email.md. */
+  emailJobs: defineTable({
+    to: v.string(),
+    userId: v.optional(v.id("users")),
+    template: v.string(),
+    locale,
+    params: v.any(),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("sending"),
+      v.literal("sent"),
+      v.literal("failed"),
+      v.literal("skipped"),
+    ),
+    attempts: v.number(),
+    lastError: v.optional(v.string()),
+    sendAfter: v.number(),
+    sentAt: v.optional(v.number()),
+    dedupeKey: v.optional(v.string()),
+    /** Pacific date the job belongs to (YYYY-MM-DD); older failed jobs are skipped, not retried. */
+    day: v.string(),
+  })
+    .index("by_status_sendAfter", ["status", "sendAfter"])
+    .index("by_dedupeKey", ["dedupeKey"])
+    .index("by_day", ["day"]),
 
   notifications: defineTable({
     userId: v.id("users"),

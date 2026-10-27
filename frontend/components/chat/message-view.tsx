@@ -48,6 +48,7 @@ import { useChat } from "./chat-context";
 import { ForwardCard } from "./forward-card";
 import { Markdown, usePlainPreview } from "./markdown";
 import { SystemMessage } from "./system-message";
+import { SharedFileList, TaskCardView } from "./task-card";
 import { personById, type Message } from "./types";
 
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -208,7 +209,7 @@ function MessageRow({ message, grouped, highlighted }: { message: Message; group
   const { selecting, selected, toggleSelected } = useChat();
   const author = personById(message.people, message.authorId);
   const time = format.dateTime(message._creationTime, { hour: "numeric", minute: "2-digit" });
-  const selectable = message.state === "normal";
+  const selectable = message.state === "normal" && message.kind !== "task";
   const isSelected = selected.has(message._id);
 
   return (
@@ -279,9 +280,11 @@ function MessageContent({ message }: { message: Message }) {
   return (
     <>
       {message.replyTo ? <ReplyQuote message={message} /> : null}
+      {message.kind === "task" ? <TaskCardView task={message.task ?? null} /> : null}
       {message.body ? <Markdown body={message.body} people={message.people} /> : null}
       {message.forward ? <ForwardCard forward={message.forward} people={message.people} /> : null}
       <AttachmentList attachments={message.attachments} />
+      <SharedFileList files={message.files} />
       {message.editedAt ? (
         <button
           type="button"
@@ -441,7 +444,7 @@ function MessageActions({ message }: { message: Message }) {
               {t("recall")}
             </DropdownMenuItem>
           ) : null}
-          {isMember ? (
+          {isMember && message.kind !== "task" ? (
             <DropdownMenuItem onSelect={() => forward([message._id])}>
               <ForwardIcon />
               {t("forward")}
@@ -451,10 +454,12 @@ function MessageActions({ message }: { message: Message }) {
             <CopyIcon />
             {t("copy")}
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => startSelecting(message)}>
-            <ListChecksIcon />
-            {t("select")}
-          </DropdownMenuItem>
+          {message.kind !== "task" ? (
+            <DropdownMenuItem onSelect={() => startSelecting(message)}>
+              <ListChecksIcon />
+              {t("select")}
+            </DropdownMenuItem>
+          ) : null}
           {channel.access.canModerate ? (
             <>
               <DropdownMenuSeparator />

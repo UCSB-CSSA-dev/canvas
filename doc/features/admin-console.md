@@ -18,7 +18,12 @@ Non-admins never see the Admin link, and every admin function re-checks permissi
 
 ## Overview
 
-Cards: pending approvals, unclaimed pre-approvals, active members, members per department, and later open assignments, overdue submissions, and emails failed in the last 24 hours (admins only).
+Cards: pending approvals, unclaimed pre-approvals, active members, and members per department.
+
+Stage 3 adds:
+- Open tasks and overdue submissions.
+- Storage (admins only): total against the free plan's 1 GB, each file space against its quota (editable; task files count toward their space) and chat attachments. See [files.md](files.md#storage-quotas).
+- Email (admins only): today's digest sent, failed and skipped, and the last error.
 
 ## Department archive
 
@@ -26,7 +31,7 @@ Archiving (admins) hides the department from pickers, makes its channels read-on
 
 ## Oversight shortcuts
 
-In the roster person drawer, admins and the person's overseers see links to that person's channels, files, and submissions. Using them goes through oversight and is logged (see [02-roles-and-permissions.md](../02-roles-and-permissions.md#oversight-监督查看)).
+In the roster person drawer, admins and the person's overseers see links to that person's chats. Using them goes through oversight and is logged (see [02-roles-and-permissions.md](../02-roles-and-permissions.md#oversight-监督查看)).
 
 ## Yearly handover (换届)
 
@@ -50,10 +55,9 @@ Logged actions (non-exhaustive):
 | `membership.add`, `membership.remove`, `membership.role_change` | Department changes |
 | `department.create`, `department.update`, `department.archive` | Department admin |
 | `oversight.channel.open` | Reading a channel through oversight |
-| `oversight.file.download` | Downloading a private file through oversight |
-| `oversight.submission.view` | Viewing a submission through oversight |
 | `message.moderate_delete` | Deleting someone else's message |
-| `file.moderate_delete` | Deleting someone else's file |
+| `file.moderate_delete` | Deleting or purging someone else's file (Stage 3) |
+| `files.quota_change` | Changing a file space's quota (Stage 3) |
 
 ## Acceptance criteria
 

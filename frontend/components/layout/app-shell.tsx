@@ -54,8 +54,8 @@ type NavItem = {
 const CHAT: NavItem = { key: "chat", href: "/chat/", icon: MessageSquareIcon };
 const NOTIFICATIONS: NavItem = { key: "notifications", href: "/notifications/", icon: BellIcon };
 const ROSTER: NavItem = { key: "roster", href: "/roster/", icon: UsersIcon };
-const FILES: NavItem = { key: "files", href: "/files/", icon: FolderIcon, disabled: true };
-const ASSIGNMENTS: NavItem = { key: "assignments", href: "/assignments/", icon: ClipboardListIcon, disabled: true };
+const FILES: NavItem = { key: "files", href: "/files/", icon: FolderIcon };
+const ASSIGNMENTS: NavItem = { key: "assignments", href: "/assignments/", icon: ClipboardListIcon };
 const MAIN_NAV: NavItem[] = [CHAT, FILES, ASSIGNMENTS];
 
 const ADMIN_OVERVIEW: NavItem = { key: "adminOverview", href: "/admin/", icon: LayoutDashboardIcon, exact: true };
@@ -68,9 +68,11 @@ const MOBILE_ADMIN: NavItem = { key: "admin", href: "/roster/", icon: ShieldIcon
 function useNav() {
   const viewer = useViewer();
   const unread = useQuery(api.notifications.unreadCount) ?? 0;
+  const todo = useQuery(api.assignments.myOpenCount) ?? 0;
   const isManager = viewer.isAdmin || viewer.ledDepartmentIds.length > 0;
   const counts: Partial<Record<NavItem["key"], number>> = {
     notifications: unread,
+    assignments: todo,
     roster: viewer.reviewCount,
     admin: viewer.reviewCount,
   };

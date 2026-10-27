@@ -7,6 +7,7 @@ import { LanguageToggle } from "@/components/layout/language-toggle";
 import { PageHeader } from "@/components/layout/app-shell";
 import { PushNotificationsCard } from "@/components/settings/push-notifications-card";
 import { DeactivateCard } from "@/components/settings/deactivate-card";
+import { DigestEmailCard } from "@/components/settings/digest-email-card";
 import { ProfileCard } from "@/components/settings/profile-card";
 import { WhoCanSeeCard } from "@/components/settings/who-can-see-card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ export default function SettingsPage() {
           </Card>
 
           <PushNotificationsCard />
+          <DigestEmailCard />
 
           <Card>
             <CardHeader>

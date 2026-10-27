@@ -37,6 +37,12 @@ export async function postSystemMessage(
 
 export async function deleteAttachmentFiles(ctx: MutationCtx, attachment: Doc<"attachments">) {
   if (attachment.expiredAt) return;
+  // Saved to Files: the file row now owns the stored object (and its thumbnail).
+  const savedCopy = await ctx.db
+    .query("files")
+    .withIndex("by_storage", (q) => q.eq("storageId", attachment.storageId))
+    .first();
+  if (savedCopy) return;
   await ctx.storage.delete(attachment.storageId);
   if (attachment.thumbStorageId) await ctx.storage.delete(attachment.thumbStorageId);
 }
@@ -74,6 +80,7 @@ export async function eraseMessageContent(ctx: MutationCtx, message: Doc<"messag
     mentionAll: false,
     searchText: "",
     forward: undefined,
+    fileIds: undefined,
   });
 }
 

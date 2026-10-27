@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import prosemirrorSyncTest from "@convex-dev/prosemirror-sync/test";
 import { convexTest } from "convex-test";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -8,7 +9,9 @@ import { upsertUserFromOAuth } from "../convex/lib/users";
 const modules = import.meta.glob("../convex/**/*.ts");
 
 export function setup() {
-  return convexTest(schema, modules);
+  const t = convexTest(schema, modules);
+  prosemirrorSyncTest.register(t);
+  return t;
 }
 
 export type TestConvex = ReturnType<typeof setup>;

@@ -37,19 +37,7 @@ What happens to messages, files, and assignments when a school year ends?
 - **Default:** keep everything. Department channels and folders carry over to the new leads. Graduated members are deactivated, not deleted.
 - Alternative: archive each year's channels and start fresh ones, or auto-delete after N years.
 
-### Q7. Storage limits
-
-Convex file storage has plan-based limits and costs.
-
-- **Default:** 25 MB per file, no per-department quota in v1. Show total usage in the admin overview.
-- Alternative: per-department quotas (for example 5 GB), or a smaller per-file limit with large videos kept elsewhere.
-
 ## Features
-
-### Q8. Grading on assignments
-
-- **Default:** no scores. Only approve or request changes, plus comments.
-- Alternative: optional points or a simple rubric.
 
 ### Q9. In-app documents (Google Docs style)
 
@@ -61,22 +49,12 @@ Convex file storage has plan-based limits and costs.
 - **Default:** seed 主席团, 活动部, 国际部, 宣传部. Admins add the rest from the roster page.
 - Needed: the full, current list of CSSA departments with official English names.
 
-### Q11. Sending account for email
-
-- **Default:** a dedicated CSSA Google account (free Gmail, about 100 recipients per day).
-- Needed: which account, and whether CSSA has Google Workspace (higher limits).
-
 ### Q12. Custom domain and account ownership
 
 Hosting is decided (GitHub Pages static export + Convex Cloud, see Decided below).
 
 - **Default:** `https://ucsb-cssa-dev.github.io/canvas/`, Convex free tier.
 - Needed: whether CSSA wants a custom domain, and who owns the GitHub organization and Convex team for continuity across officer terms.
-
-### Q13. Calendar and events
-
-- **Default:** out of scope; assignment due dates only. A calendar view of due dates is a Stage 5 option.
-- Alternative: add CSSA events (with RSVP) as a fourth pillar later.
 
 ## Accounts and roster (added with Stage 1)
 
@@ -131,3 +109,11 @@ Record decisions here as `YYYY-MM-DD - Qn - decision - where documented`.
 - 2026-10-20 - Group chats - 部员 propose groups with involved departments; one 部长 of an involved department (or 主席团 / system admin) approves and picks members; involved departments' 部长 are members automatically and add their own members - [09-roadmap.md](09-roadmap.md#22-group-chats-and-announcement-channels)
 - 2026-10-20 - Multi-select - combined forward (合并转发) as a snapshot, and delete locally on this browser only - [09-roadmap.md](09-roadmap.md#28-multi-select-forward-delete-locally)
 - 2026-10-22 - Announcements - no separate announcement channels; admins (全体) and 部长 (their department chat) post announcements inside the chat, which stay highlighted with their own badge until each reader taps 知道了 - [chat.md](features/chat.md#announcements-公告)
+- 2026-10-22 - Q7 - stay on the Convex free plan: 25 MB per file, a quota per file space (default 75 MB, set by 主席团), usage card in the admin console - [files.md](features/files.md#storage-quotas)
+- 2026-10-22 - File spaces - 公共 (主席团 edit), 主席团 (private), one per department (everyone views, members upload, 部长 manage); no personal files and no file oversight; files can be shared into chats and attachments saved to Files - [files.md](features/files.md#spaces)
+- 2026-10-22 - Q8 - no scores; approve or request changes, plus comments - [assignments.md](features/assignments.md#review)
+- 2026-10-22 - Tasks - belong to a chat; 主席团 assign anyone, 部长 within their department and groups involving it; publishing posts a card in the chat - [assignments.md](features/assignments.md#who-can-create-and-for-whom)
+- 2026-10-22 - Q13 - events (e.g. 春晚) are a kind of task with a time, place, helpers and prep tasks; no RSVP - [assignments.md](features/assignments.md#tasks-and-events)
+- 2026-10-22 - Q11 - a dedicated free Gmail account; the only email is a daily digest at 10:00 AM Pacific to everyone with open tasks or upcoming events, no opt-out, optional alternative address - [notifications-and-email.md](features/notifications-and-email.md#daily-digest)
+- 2026-10-26 - Large files - files over 10 MB (up to 500 MB), or uploads to a full space, go to the CSSA Google Drive through the Apps Script, viewable by anyone with the link - [files.md](features/files.md#google-drive)
+- 2026-10-26 - Documents - tasks and events can have collaborative markdown documents (live editing, rendered as you type, .md and PDF export); nothing else is created in the Hub, other files are uploaded - [assignments.md](features/assignments.md#documents)

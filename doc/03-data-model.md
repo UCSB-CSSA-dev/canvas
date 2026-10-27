@@ -17,7 +17,7 @@ Only create the tables for the current stage (see [09-roadmap.md](09-roadmap.md)
 | --- | --- |
 | 1 | `users` (+ Convex Auth tables), `departments`, `departmentMemberships`, `formerPresidium`, `deactivationRequests`, `preApprovals`, `channels`, `channelMembers`, `messages`, `auditLogs` |
 | 2 | `groupDepartments`, `groupProposals`, `messageEdits`, `messageReactions`, `attachments`, `chatApps`, `chatAppResponses`, `notifications`, `pushSubscriptions` |
-| 3 | `folders`, `files`, `assignments`, `assignmentSubmissions`, `assignmentComments`, `emailJobs` |
+| 3 | `fileSpaces`, `folders`, `files`, `driveUploads`, `documents` (+ the `prosemirrorSync` component), `assignments`, `assignmentSubmissions`, `assignmentComments`, `emailJobs` (+ `users.digestEmail`, `messages.assignmentId` and `messages.fileIds`) |
 | 4 | TBA (likely embedding tables with vector indexes for AI features) |
 
 The chat tables below match what Stage 2 deployed. Notes:
@@ -39,10 +39,13 @@ erDiagram
   users ||--o{ channelMembers : joins
   channels ||--o{ messages : contains
   messages ||--o{ messageReactions : has
+  departments ||--o| fileSpaces : "has a space"
   departments ||--o{ folders : owns
   folders ||--o{ folders : parent
   folders ||--o{ files : contains
   users ||--o{ files : uploads
+  channels ||--o{ assignments : "posted in"
+  assignments ||--o{ assignments : "prep tasks"
   users ||--o{ assignments : creates
   assignments ||--o{ assignmentSubmissions : "one per assignee"
   assignments ||--o{ assignmentComments : has
@@ -56,13 +59,6 @@ erDiagram
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
-
-const attachment = v.object({
-  storageId: v.id("_storage"),
-  name: v.string(),
-  contentType: v.string(),
-  size: v.number(),
-});
 
 export default defineSchema({
   ...authTables, // Convex Auth tables; `users` is overridden below
@@ -101,11 +97,7 @@ export default defineSchema({
     reviewedAt: v.optional(v.number()),
     rejectionReason: v.optional(v.string()),
     locale: v.optional(v.union(v.literal("zh"), v.literal("en"))),
-    emailPrefs: v.optional(v.object({
-      assignments: v.boolean(),     // new assignment + due-soon reminders
-      mentions: v.boolean(),        // @mention digest
-      announcements: v.boolean(),
-    })),
+    digestEmail: v.optional(v.string()), // daily digest address; unset = sign-in email (Stage 3)
     lastSeenAt: v.optional(v.number()),
   })
     .index("email", ["email"])           // required by Convex Auth
@@ -230,7 +222,7 @@ export default defineSchema({
     channelId: v.id("channels"),
     authorId: v.id("users"),
     body: v.string(),                        // lightweight markdown; mentions as <@id> / <@all>
-    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"))),
+    kind: v.optional(v.union(v.literal("user"), v.literal("system"), v.literal("forward"), v.literal("task"))),
     mentionUserIds: v.optional(v.array(v.id("users"))),
     mentionAll: v.optional(v.boolean()),
     replyToId: v.optional(v.id("messages")),
@@ -242,6 +234,8 @@ export default defineSchema({
     searchText: v.optional(v.string()),      // lowercased, CJK split into bigrams
     system: v.optional(v.object({ event: v.string(), params: v.any() })),
     forward: v.optional(v.any()),            // snapshot of forwarded messages
+    assignmentId: v.optional(v.id("assignments")), // kind "task": the task or event card (Stage 3)
+    fileIds: v.optional(v.array(v.id("files"))),   // files shared from Files (Stage 3)
   })
     .index("by_channel", ["channelId"])                 // ordered by _creationTime
     .index("by_channel_announcement", ["channelId", "announcement"]) // unseen announcements
@@ -272,7 +266,8 @@ export default defineSchema({
     expiredAt: v.optional(v.number()),       // files deleted; row kept for the "expired" card
   })
     .index("by_message", ["messageId"])
-    .index("by_expiry", ["expiredAt", "expiresAt"]),
+    .index("by_expiry", ["expiredAt", "expiresAt"])
+    .index("by_storage", ["storageId"]),           // a Save to Files copy may share the stored object
 
   chatApps: defineTable({                    // 接龙 / 投票 / 集会
     channelId: v.id("channels"),
@@ -302,76 +297,117 @@ export default defineSchema({
     .index("by_user", ["userId"]),
 
   // ---------- Files ----------
+  // One row per file space: departmentId unset = 公共 (public); the presidium department = 主席团.
+  fileSpaces: defineTable({
+    departmentId: v.optional(v.id("departments")),
+    quotaBytes: v.number(),                        // default DEFAULT_SPACE_QUOTA_BYTES (75 MB)
+    usedBytes: v.number(),                         // includes trashed files until purged
+  }).index("by_department", ["departmentId"]),
+
   folders: defineTable({
     name: v.string(),
-    scope: v.union(v.literal("org"), v.literal("department"), v.literal("personal")),
-    departmentId: v.optional(v.id("departments")), // scope = department
-    ownerId: v.optional(v.id("users")),            // scope = personal
-    parentId: v.optional(v.id("folders")),         // undefined = root of its scope
+    departmentId: v.optional(v.id("departments")), // the space; unset = 公共
+    parentId: v.optional(v.id("folders")),         // unset = top level of the space
+    assignmentId: v.optional(v.id("assignments")), // automatic "任务 Tasks / <title>" folder
+    tasksRoot: v.optional(v.boolean()),            // the automatic "任务 Tasks" parent folder
     createdBy: v.id("users"),
     deletedAt: v.optional(v.number()),
+    deletedBy: v.optional(v.id("users")),
   })
-    .index("by_parent", ["parentId"])
-    .index("by_scope_department", ["scope", "departmentId"])
-    .index("by_scope_owner", ["scope", "ownerId"]),
+    .index("by_space_parent", ["departmentId", "parentId"])
+    .index("by_assignment", ["assignmentId"])
+    .index("by_deletedAt", ["deletedAt"]),
 
   files: defineTable({
-    storageId: v.id("_storage"),
+    storageId: v.optional(v.id("_storage")),       // may be shared with a chat attachment; unset for Drive files
+    driveFileId: v.optional(v.string()),           // over 10 MB or space full: kept in the CSSA Google Drive
+    thumbStorageId: v.optional(v.id("_storage")),  // images only
     name: v.string(),
     contentType: v.string(),
     size: v.number(),
-    folderId: v.id("folders"),
-    // denormalized from folder for fast permission checks
-    scope: v.union(v.literal("org"), v.literal("department"), v.literal("personal")),
-    departmentId: v.optional(v.id("departments")),
+    departmentId: v.optional(v.id("departments")), // the space, copied from the folder
+    folderId: v.optional(v.id("folders")),         // unset = top level of the space
     uploadedBy: v.id("users"),
-    description: v.optional(v.string()),
     deletedAt: v.optional(v.number()),
+    deletedBy: v.optional(v.id("users")),
   })
-    .index("by_folder", ["folderId"])
-    .index("by_uploader", ["uploadedBy"])
-    .searchIndex("search_name", { searchField: "name", filterFields: ["scope", "departmentId"] }),
+    .index("by_space_folder", ["departmentId", "folderId"])
+    .index("by_storage", ["storageId"])
+    .index("by_deletedAt", ["deletedAt"]),
 
-  // ---------- Assignments ----------
-  assignments: defineTable({
+  // A Google Drive upload between drive.startUpload and drive.finishUpload; forgotten after a day.
+  driveUploads: defineTable({
+    userId: v.id("users"),
+    space: v.optional(v.string()),
+    folderId: v.optional(v.id("folders")),
+    assignmentId: v.optional(v.id("assignments")),
+    name: v.string(),
+    size: v.number(),
+    contentType: v.string(),
+    driveFolder: v.string(),                       // space key: "CSSA Hub Files/<key>" in Drive
+  }),
+
+  // Collaborative markdown documents of a task or event. The content (ProseMirror snapshots and
+  // steps) lives in the prosemirrorSync component's own tables, keyed by the document id.
+  documents: defineTable({
+    assignmentId: v.id("assignments"),
     title: v.string(),
-    description: v.string(),                 // markdown
     createdBy: v.id("users"),
-    departmentId: v.optional(v.id("departments")), // the department this work is for
-    dueAt: v.optional(v.number()),
+    updatedAt: v.number(),
+    updatedBy: v.id("users"),
+  }).index("by_assignment", ["assignmentId"]),
+
+  // ---------- Tasks and events (UI: 任务 / 活动) ----------
+  assignments: defineTable({
+    kind: v.union(v.literal("task"), v.literal("event")),
+    title: v.string(),
+    description: v.optional(v.string()),     // markdown
+    createdBy: v.id("users"),
+    channelId: v.id("channels"),             // 全体, department or group chat; decides who can create and be assigned
+    departmentId: v.optional(v.id("departments")), // file space; unset = 公共
+    eventId: v.optional(v.id("assignments")),      // prep task of an event
     status: v.union(v.literal("draft"), v.literal("open"), v.literal("closed")),
-    requiresSubmission: v.boolean(),         // false = just "mark done"
-    attachments: v.array(attachment),
+    dueAt: v.optional(v.number()),           // tasks
+    startAt: v.optional(v.number()),         // events (required for them)
+    endAt: v.optional(v.number()),
+    location: v.optional(v.string()),
+    requiresSubmission: v.boolean(),         // false = just "mark done"; always false for events
+    autoApprove: v.optional(v.boolean()),    // mark done goes straight to approved
+    fileIds: v.array(v.id("files")),         // creator's files, in the task's folder
+    draftAssigneeIds: v.optional(v.array(v.id("users"))), // drafts: assigned on publish
+    draftEveryone: v.optional(v.boolean()),  // drafts: assign everyone in the chat on publish
+    messageId: v.optional(v.id("messages")), // the chat card
     publishedAt: v.optional(v.number()),
     closedAt: v.optional(v.number()),
   })
     .index("by_creator", ["createdBy"])
-    .index("by_department", ["departmentId"])
-    .index("by_status_due", ["status", "dueAt"]),
+    .index("by_channel", ["channelId"])
+    .index("by_event", ["eventId"])
+    .index("by_status_due", ["status", "dueAt"])
+    .index("by_status_start", ["status", "startAt"]),
 
-  // One row per assignee, created when the assignment is published.
+  // One row per assignee (or event helper), created when the task is published.
   assignmentSubmissions: defineTable({
     assignmentId: v.id("assignments"),
     assigneeId: v.id("users"),
     status: v.union(
       v.literal("assigned"),
-      v.literal("in_progress"),
       v.literal("submitted"),
       v.literal("changes_requested"),
       v.literal("approved"),
     ),
     text: v.optional(v.string()),
-    attachments: v.array(attachment),
+    fileIds: v.array(v.id("files")),
     link: v.optional(v.string()),
     submittedAt: v.optional(v.number()),
+    late: v.optional(v.boolean()),
     reviewedBy: v.optional(v.id("users")),
     reviewedAt: v.optional(v.number()),
-    dueSoonReminderSentAt: v.optional(v.number()),
+    dueSoonReminderSentAt: v.optional(v.number()), // due soon, or event_soon
     overdueReminderSentAt: v.optional(v.number()),
   })
     .index("by_assignment", ["assignmentId"])
     .index("by_assignee", ["assigneeId"])
-    .index("by_assignee_status", ["assigneeId", "status"])
     .index("by_assignment_assignee", ["assignmentId", "assigneeId"]),
 
   // Feedback thread on a specific submission
@@ -413,18 +449,26 @@ export default defineSchema({
   emailJobs: defineTable({
     to: v.string(),
     userId: v.optional(v.id("users")),
-    template: v.string(),             // see 06-email-apps-script.md
+    template: v.string(),             // "daily_digest"; see 06-email-apps-script.md
     locale: v.union(v.literal("zh"), v.literal("en")),
     params: v.any(),
-    status: v.union(v.literal("queued"), v.literal("sending"), v.literal("sent"), v.literal("failed")),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("sending"),
+      v.literal("sent"),
+      v.literal("failed"),
+      v.literal("skipped"),           // quota reached, or a day old
+    ),
     attempts: v.number(),
     lastError: v.optional(v.string()),
     sendAfter: v.number(),
     sentAt: v.optional(v.number()),
-    dedupeKey: v.optional(v.string()), // e.g. "due_soon:<submissionId>"
+    dedupeKey: v.optional(v.string()), // "digest:<userId>:<YYYY-MM-DD>"
+    day: v.string(),                  // Pacific date (YYYY-MM-DD); older failed jobs are skipped, not retried
   })
     .index("by_status_sendAfter", ["status", "sendAfter"])
-    .index("by_dedupeKey", ["dedupeKey"]),
+    .index("by_dedupeKey", ["dedupeKey"])
+    .index("by_day", ["day"]),
 
   // ---------- Audit ----------
   auditLogs: defineTable({
@@ -445,7 +489,7 @@ export default defineSchema({
 
 ### users
 
-- Created by Convex Auth on first Google sign-in. A `createOrUpdateUser` callback (or `afterUserCreatedOrUpdated`) sets `status = "new"` and default `locale = "zh"` and `emailPrefs`.
+- Created by Convex Auth on first Google sign-in. A `createOrUpdateUser` callback (or `afterUserCreatedOrUpdated`) sets `status = "new"` and default `locale = "zh"`.
 - The `@ucsb.edu` domain check happens in the auth callback, **before** a user row is created. See [features/accounts-and-onboarding.md](features/accounts-and-onboarding.md).
 - Display name: `nameZh` when locale is `zh` and it exists, otherwise `nameEn`, otherwise `name` from Google.
 
@@ -516,15 +560,20 @@ deactivationRequests: defineTable({
 - `announcement: true` marks a 公告. Only `messages.send` sets it (checked against `canAnnounce`); edits keep it.
 - Paginate with `.withIndex("by_channel", q => q.eq("channelId", id)).order("desc").paginate(opts)`.
 
-### folders and files
+### fileSpaces, folders and files
 
-- Root folders: one `org` root, one root per department, and one `personal` root per user, created lazily.
-- `files.scope` and `files.departmentId` are copied from the folder and updated when a file moves.
+- A space is identified by `departmentId` (unset = 公共). There are no root folder rows: `parentId` / `folderId` unset means the top level of the space.
+- `fileSpaces` rows are created lazily with the default quota. `usedBytes` changes in the same mutation that saves or purges a file, so it never needs recounting.
+- A stored object can be referenced by a chat attachment and by one or more `files` rows (Save to Files). Before deleting a stored object, check `attachments` and `files.by_storage`.
+- Moving is only within a space, so `files.departmentId` never changes.
 
 ### assignments and assignmentSubmissions
 
-- Assigning to a whole department expands to individual `assignmentSubmissions` rows at publish time. Members who join later are not added automatically, but a lead can add them.
-- Assignment `status` is the creator's control (open or closed). Per-person progress lives in `assignmentSubmissions.status`.
+- The table names stay `assignments*`; the UI says 任务 / 活动.
+- "Everyone in this chat" expands to individual `assignmentSubmissions` rows at publish time. People who join later are not added automatically, but the creator can add them.
+- `status` on `assignments` is the creator's control (draft, open, closed). Per-person progress lives in `assignmentSubmissions.status`.
+- Event helpers have rows too (status stays `assigned`), so reminders, the digest and "my tasks" treat tasks and events the same way.
+- Chat cards are `messages` with `kind: "task"` and `assignmentId`. Messages that share a file have `fileIds`.
 
 ### auditLogs
 
@@ -533,7 +582,7 @@ deactivationRequests: defineTable({
 ## Seed data (`convex/seed.ts`, internal)
 
 1. Create departments: presidium, events, international, publicity (the rest are added from the roster page), each with its department channel.
-2. Create the `org` general channel. From Stage 3 on: the org root folder.
+2. Create the `org` general channel.
 3. The seed is idempotent (safe to run twice) and runs automatically when the first user is created if no departments exist yet.
 
 There is no manual admin bootstrap step: the first account to sign in becomes system admin. See [features/accounts-and-onboarding.md](features/accounts-and-onboarding.md#first-account-becomes-system-admin).

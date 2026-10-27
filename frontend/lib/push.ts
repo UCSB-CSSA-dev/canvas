@@ -75,6 +75,12 @@ function sameKey(a: ArrayBuffer | null, b: Uint8Array) {
   return view.every((byte, i) => byte === b[i]);
 }
 
+/** Whether the subscription was made with this VAPID public key; true when the browser doesn't say. */
+export function matchesKey(subscription: PushSubscription, publicKey: string) {
+  const current = subscription.options?.applicationServerKey;
+  return current == null || sameKey(current, keyBytes(publicKey));
+}
+
 export function subscriptionArgs(subscription: PushSubscription) {
   const json = subscription.toJSON();
   return { endpoint: subscription.endpoint, p256dh: json.keys?.p256dh ?? "", auth: json.keys?.auth ?? "" };
@@ -120,7 +126,7 @@ export function usePush() {
     const registration = await register();
     await navigator.serviceWorker.ready;
     let subscription = await registration.pushManager.getSubscription();
-    if (subscription && !sameKey(subscription.options.applicationServerKey, key)) {
+    if (subscription && !matchesKey(subscription, publicKey)) {
       await subscription.unsubscribe();
       subscription = null;
     }

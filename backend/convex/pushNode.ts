@@ -9,6 +9,11 @@ import { pushText } from "./lib/pushText";
 
 const URGENT = new Set(["dm", "chat", "mention", "reply", "announcement", "test"]);
 
+/** The device subscribed with another VAPID key (Apple: VapidPkHashMismatch; FCM: credentials don't correspond). */
+function keyMismatch(error: WebPushError) {
+  return error.statusCode === 403 && /VapidPkHashMismatch|do not correspond/i.test(error.body ?? "");
+}
+
 export const send = internalAction({
   args: { userIds: v.array(v.id("users")), input: pushInputValidator },
   handler: async (ctx, { userIds, input }) => {
@@ -34,11 +39,15 @@ export const send = internalAction({
             { vapidDetails, TTL: 24 * 60 * 60, urgency: URGENT.has(input.type) ? "high" : "normal" },
           );
         } catch (error) {
-          if (error instanceof WebPushError && (error.statusCode === 404 || error.statusCode === 410)) {
+          if (error instanceof WebPushError && (error.statusCode === 404 || error.statusCode === 410 || keyMismatch(error))) {
             gone.push(device.endpoint);
           } else {
             failed++;
-            console.error("push failed", error instanceof WebPushError ? error.statusCode : error);
+            console.error(
+              "push failed",
+              new URL(device.endpoint).host,
+              error instanceof WebPushError ? `${error.statusCode} ${error.body}` : error,
+            );
           }
         }
       }),

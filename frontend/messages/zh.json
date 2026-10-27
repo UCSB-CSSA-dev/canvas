@@ -86,7 +86,8 @@
     "google": "使用 UCSB Google 账号登录",
     "domainHint": "仅限 @ucsb.edu 邮箱",
     "failed": "登录失败。请确认使用的是已验证的 @ucsb.edu 邮箱。",
-    "privacyLink": "隐私政策"
+    "privacyLink": "隐私政策",
+    "aboutLink": "关于我们"
   },
   "privacy": {
     "title": "隐私政策",
@@ -465,7 +466,10 @@
     "digestUsingCustom": "目前发送到 {email}。",
     "digestReset": "改回登录邮箱",
     "digestSaved": "已保存",
-    "save": "保存"
+    "save": "保存",
+    "publicPageLink": "查看「关于我们」页面",
+    "showEmailPublicly": "在「关于我们」公开页面显示我的邮箱",
+    "showEmailPubliclyHint": "默认隐藏。勾选后任何人都能看到 {email}。"
   },
   "weekdays": {
     "0": "周日",
@@ -1105,5 +1109,52 @@
     "chatCardLabel": "协作文档",
     "editedAt": "编辑于 {time}",
     "cardGone": "文档已删除"
+  },
+  "about": {
+    "navAbout": "关于我们",
+    "navWhatWeDo": "我们做什么",
+    "navTeam": "团队",
+    "openHub": "进入 Hub",
+    "eyebrow": "UCSB 中国学生学者联谊会",
+    "heroTitle": "在 UCSB 连接社区，共同庆祝文化与成长",
+    "heroSubtitle": "加州大学圣塔芭芭拉分校中国学生学者联谊会（CSSA）为在校中国学生和学者打造一个充满活力、彼此支持的社区。",
+    "meetTeam": "认识我们的团队",
+    "officialSite": "访问官方网站",
+    "statMembers": "成员",
+    "statDepartments": "部门",
+    "statCampus": "Santa Barbara",
+    "aboutEyebrow": "关于 CSSA",
+    "aboutTitle": "欢迎来到 UCSB CSSA",
+    "aboutBody1": "UCSB 中国学生学者联谊会致力于为在校中国学生和学者打造充满活力的社区。我们全年举办文化活动、学术交流和社交聚会，帮助成员建立联系、庆祝文化，并在 UCSB 共同成长。",
+    "aboutBody2": "无论你是想结交朋友、探索文化，还是在求学过程中寻找支持，CSSA 都在你身边。",
+    "whatEyebrow": "我们做什么",
+    "whatTitle": "全年不停的精彩",
+    "pillars": {
+      "culture": {
+        "title": "文化活动",
+        "body": "春晚、中秋、新春庙会……和大家一起过属于我们的节日。"
+      },
+      "academic": {
+        "title": "学术交流",
+        "body": "专业分享、学长学姐经验谈和职业讲座，帮你少走弯路。"
+      },
+      "social": {
+        "title": "社交聚会",
+        "body": "桌游、徒步、聚餐，在圣塔芭芭拉的阳光下认识新朋友。"
+      },
+      "newcomers": {
+        "title": "新生支持",
+        "body": "新生必读、线上见面会和云端校园导览，帮你更快适应 UCSB。"
+      }
+    },
+    "teamEyebrow": "团队",
+    "teamTitle": "认识我们的成员",
+    "teamBody": "CSSA 由一群热心的同学志愿运营。下面是我们各个部门的成员。",
+    "teamEmpty": "成员名单即将公布。",
+    "filterAll": "全部",
+    "otherMembers": "其他成员",
+    "memberCount": "{count} 人",
+    "privacy": "隐私政策",
+    "photoCredits": "校园照片来自 Wikimedia Commons："
   }
 }

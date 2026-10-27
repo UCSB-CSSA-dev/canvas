@@ -2,6 +2,7 @@
 
 import { useMutation } from "convex/react";
 import { EyeIcon, ImageUpIcon } from "lucide-react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { useViewer } from "@/components/auth/account-state";
 import { PersonAvatar } from "@/components/people/person-avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +25,7 @@ export function ProfileCard() {
   const generateUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const setAvatar = useMutation(api.users.setAvatar);
   const removeAvatar = useMutation(api.users.removeAvatar);
+  const setShowEmail = useMutation(api.users.setShowEmailPublicly);
   const showError = useErrorToast();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -85,7 +88,12 @@ export function ProfileCard() {
       <CardContent className="flex flex-col gap-4">
         <p className="flex items-start gap-2 rounded-md bg-secondary px-3 py-2 text-xs text-muted-foreground">
           <EyeIcon className="mt-0.5 size-3.5 shrink-0 text-primary" />
-          {t("settings.publicNotice")}
+          <span>
+            {t("settings.publicNotice")}{" "}
+            <Link href="/about-us/" className="text-primary underline-offset-4 hover:underline">
+              {t("settings.publicPageLink")}
+            </Link>
+          </span>
         </p>
 
         <div className="flex items-center gap-4">
@@ -155,6 +163,20 @@ export function ProfileCard() {
             {busy ? t("common.saving") : t("common.save")}
           </Button>
         </form>
+
+        <label className="flex items-start gap-2 border-t border-border pt-4 text-sm">
+          <Checkbox
+            checked={viewer.showEmailPublicly}
+            onCheckedChange={(v) => void setShowEmail({ show: v === true }).catch(showError)}
+            className="mt-0.5"
+          />
+          <span>
+            {t("settings.showEmailPublicly")}
+            <span className="block text-xs text-muted-foreground">
+              {t("settings.showEmailPubliclyHint", { email: viewer.email ?? "" })}
+            </span>
+          </span>
+        </label>
       </CardContent>
     </Card>
   );

@@ -107,6 +107,32 @@
   }
 }
 
+/* About-us hero: 4 photos, 7s each, cross-fading with a slow zoom. */
+.campus-slide {
+  opacity: 0;
+  animation: campus-slide 28s ease-in-out infinite both;
+}
+@keyframes campus-slide {
+  0% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+  6% {
+    opacity: 1;
+  }
+  25% {
+    opacity: 1;
+  }
+  32% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 /* Task documents (TipTap editor) and rendered markdown. */
 .doc-content {
   line-height: 1.7;

@@ -86,7 +86,8 @@
     "google": "Sign in with UCSB Google",
     "domainHint": "@ucsb.edu accounts only",
     "failed": "Sign-in failed. Make sure you use a verified @ucsb.edu account.",
-    "privacyLink": "Privacy policy"
+    "privacyLink": "Privacy policy",
+    "aboutLink": "About us"
   },
   "privacy": {
     "title": "Privacy Policy",
@@ -465,7 +466,10 @@
     "digestUsingCustom": "Currently sent to {email}.",
     "digestReset": "Use my sign-in email",
     "digestSaved": "Saved",
-    "save": "Save"
+    "save": "Save",
+    "publicPageLink": "See the About us page",
+    "showEmailPublicly": "Show my email on the public About us page",
+    "showEmailPubliclyHint": "Hidden by default. When on, anyone can see {email}."
   },
   "weekdays": {
     "0": "Sun",
@@ -1105,5 +1109,52 @@
     "chatCardLabel": "Shared document",
     "editedAt": "Edited {time}",
     "cardGone": "Document deleted"
+  },
+  "about": {
+    "navAbout": "About",
+    "navWhatWeDo": "What we do",
+    "navTeam": "Team",
+    "openHub": "Open the Hub",
+    "eyebrow": "UCSB Chinese Students and Scholars Association",
+    "heroTitle": "Connecting community, celebrating culture and growth at UCSB",
+    "heroSubtitle": "The UCSB Chinese Students and Scholars Association (CSSA) builds a vibrant, supportive community for Chinese students and scholars on campus.",
+    "meetTeam": "Meet the team",
+    "officialSite": "Visit the official site",
+    "statMembers": "Members",
+    "statDepartments": "Departments",
+    "statCampus": "Santa Barbara",
+    "aboutEyebrow": "About CSSA",
+    "aboutTitle": "Welcome to UCSB CSSA",
+    "aboutBody1": "UCSB CSSA is dedicated to building a vibrant community for Chinese students and scholars. All year round we host cultural events, academic exchanges and social gatherings that help members connect, celebrate culture and grow together at UCSB.",
+    "aboutBody2": "Whether you want to make friends, explore culture, or find support during your studies, CSSA is here for you.",
+    "whatEyebrow": "What we do",
+    "whatTitle": "Something going on all year",
+    "pillars": {
+      "culture": {
+        "title": "Cultural events",
+        "body": "Spring Festival Gala, Mid-Autumn, the Lunar New Year fair: celebrate our holidays together."
+      },
+      "academic": {
+        "title": "Academic exchange",
+        "body": "Major guides, talks from upperclassmen and career sessions to help you find your way."
+      },
+      "social": {
+        "title": "Social gatherings",
+        "body": "Board games, hikes and dinners: meet new friends under the Santa Barbara sun."
+      },
+      "newcomers": {
+        "title": "Newcomer support",
+        "body": "Freshman guides, online welcome sessions and a virtual campus tour to help you settle in."
+      }
+    },
+    "teamEyebrow": "Team",
+    "teamTitle": "Meet our members",
+    "teamBody": "CSSA is run by student volunteers. Here are the people in each of our departments.",
+    "teamEmpty": "The team list is coming soon.",
+    "filterAll": "All",
+    "otherMembers": "Other members",
+    "memberCount": "{count, plural, one {# person} other {# people}}",
+    "privacy": "Privacy policy",
+    "photoCredits": "Campus photos from Wikimedia Commons:"
   }
 }

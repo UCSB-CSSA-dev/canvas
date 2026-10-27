@@ -62,6 +62,8 @@ export default defineSchema({
     locale: v.optional(locale),
     /** Daily digest address; unset sends to the sign-in email. */
     digestEmail: v.optional(v.string()),
+    /** Show the sign-in email on the public about-us page (hidden by default). */
+    showEmailPublicly: v.optional(v.boolean()),
   })
     .index("email", ["email"])
     .index("by_status", ["status"])

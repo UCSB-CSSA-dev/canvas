@@ -100,6 +100,7 @@ export const viewer = query({
       image: user.avatarUrl ?? user.image,
       hasCustomAvatar: user.avatarStorageId !== undefined,
       bio: user.bio,
+      showEmailPublicly: user.showEmailPublicly ?? false,
       nameZh: user.nameZh,
       nameEn: user.nameEn,
       status: user.status ?? "new",
@@ -230,6 +231,14 @@ export const updateProfile = mutation({
       nameEn: cleanName(args.nameEn),
       ...(args.bio !== undefined ? { bio: bio || undefined } : {}),
     });
+  },
+});
+
+export const setShowEmailPublicly = mutation({
+  args: { show: v.boolean() },
+  handler: async (ctx, args) => {
+    const { user } = await requireApproved(ctx);
+    await ctx.db.patch("users", user._id, { showEmailPublicly: args.show || undefined });
   },
 });
 

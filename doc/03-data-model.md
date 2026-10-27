@@ -98,6 +98,7 @@ export default defineSchema({
     rejectionReason: v.optional(v.string()),
     locale: v.optional(v.union(v.literal("zh"), v.literal("en"))),
     digestEmail: v.optional(v.string()), // daily digest address; unset = sign-in email (Stage 3)
+    showEmailPublicly: v.optional(v.boolean()), // show the email on the public /about-us page (default hidden)
     lastSeenAt: v.optional(v.number()),
   })
     .index("email", ["email"])           // required by Convex Auth

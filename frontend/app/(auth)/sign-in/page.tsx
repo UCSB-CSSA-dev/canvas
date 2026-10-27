@@ -53,9 +53,14 @@ function SignInCard() {
           {t("google")}
         </Button>
         <p className="text-center text-xs text-muted-foreground">{t("domainHint")}</p>
-        <Link href="/privacy/" className="text-center text-xs text-muted-foreground underline-offset-4 hover:underline">
-          {t("privacyLink")}
-        </Link>
+        <div className="flex justify-center gap-4 text-xs text-muted-foreground">
+          <Link href="/about-us/" className="underline-offset-4 hover:underline">
+            {t("aboutLink")}
+          </Link>
+          <Link href="/privacy/" className="underline-offset-4 hover:underline">
+            {t("privacyLink")}
+          </Link>
+        </div>
       </CardContent>
     </Card>
   );

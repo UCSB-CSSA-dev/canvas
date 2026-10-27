@@ -80,6 +80,16 @@ Clicking a person opens a drawer:
   - Add to another department, deactivate (admins only, not on system admins or the 主席).
 - Promotions and department creation use a typed confirmation: the user types the exact phrase (for example `将李华设为活动部部长`) before the confirm button unlocks. Phrases are listed in [02-roles-and-permissions.md](../02-roles-and-permissions.md#typed-confirmation).
 
+## Public about-us page (`/about-us/`)
+
+A public page (no sign-in) introducing CSSA, modeled on [ucsbcssa.com](https://www.ucsbcssa.com): hero, about, what we do, and the team.
+
+- **Team:** every approved member, grouped by department (主席团 first, then by `sortOrder`; 部长 before 部员), with a filter chip per department. Members without a department are under "其他成员".
+- **Each card:** photo, name in both languages, positions (主席 / 副主席, or "<department> · 部长 / 部员"), and their bio from Settings.
+- **Email:** hidden by default. A member can show it with "在「关于我们」公开页面显示我的邮箱" in Settings (`users.setShowEmailPublicly`).
+- `about.roster` is a public query and returns only those fields. Settings already tells members that photo, names and bio are public.
+- Linked from the sign-in page and from Settings.
+
 ## Pre-approving emails
 
 The "+ 预批准邮箱 / Pre-approve emails" button (page header for admins, or "+ Add" on a department card for leads) opens a dialog:

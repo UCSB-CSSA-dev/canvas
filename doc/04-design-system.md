@@ -2,10 +2,10 @@
 
 ## Principles
 
-- **Minimal and quiet.** Dark surfaces, white text, one accent color. No gradients, heavy shadows, or decorative illustrations.
+- **Minimal and quiet.** Neutral surfaces, contrasting text, one accent color. No gradients, heavy shadows, or decorative illustrations.
 - **Gold means attention.** Use gold/yellow only for primary actions, active navigation, unread badges, mentions, and important states. If everything is gold, nothing is.
 - **Content first.** Chat messages, file names, and assignment titles should be the most readable things on the screen.
-- **Dark only** in v1. No light theme toggle.
+- **Dark and light.** Default to dark; the theme toggle saves the browser's choice and restores it before paint.
 
 ## Logo
 
@@ -50,12 +50,12 @@ Both components live in `components/layout/brand.tsx` and use static imports, so
 Rules:
 
 - Text on `background` and `surface` must be `foreground` or `muted-foreground` for contrast.
-- Never put white text on gold. Use `primary-foreground` (near black).
+- Always use `primary-foreground` on gold: near black in dark mode, white on the deeper gold in light mode.
 - Status chips use a tinted background (12% opacity of the color) with the full color for text.
 
 ## shadcn/ui theme
 
-Initialize shadcn with the "neutral" base and override the CSS variables in `app/globals.css`. Use the `.dark` palette as the only palette by adding `class="dark"` on `<html>`.
+Initialize shadcn with the "neutral" base and override the CSS variables in `app/globals.css`. The root uses either `.dark` or `.light`. The color table above describes dark mode; light mode uses `#fafafa` backgrounds, white cards, `#171717` text, and `#856300` gold for readable contrast. `BrandLogo` uses the original dark-text logo in light mode.
 
 ```css
 :root,

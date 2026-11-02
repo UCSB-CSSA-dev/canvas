@@ -1,6 +1,7 @@
 import Image from "next/image";
 import logoMark from "@/assets/brand/logo-mark.webp";
 import logoOnDark from "@/assets/brand/logo-on-dark.webp";
+import logo from "@/assets/brand/logo.webp";
 import { cn } from "@/lib/utils";
 
 const FULL_NAME = "UCSB CSSA · Chinese Students and Scholars Association · 加州大学圣塔芭芭拉分校中国学生学者联合会";
@@ -17,5 +18,10 @@ export function BrandMark({ className }: { className?: string }) {
 
 /** Full logo with the association's names; for auth and landing screens. */
 export function BrandLogo({ className }: { className?: string }) {
-  return <Image src={logoOnDark} alt={FULL_NAME} priority className={cn("h-auto", className)} />;
+  return (
+    <span className={cn("block", className)}>
+      <Image src={logoOnDark} alt={FULL_NAME} priority className="hidden h-auto dark:block" />
+      <Image src={logo} alt={FULL_NAME} priority className="h-auto dark:hidden" />
+    </span>
+  );
 }

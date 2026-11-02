@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { BrandMark } from "@/components/layout/brand";
 import { LanguageToggle } from "@/components/layout/language-toggle";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 const SECTIONS = ["use", "oversight", "storage", "delete", "contact"] as const;
 
@@ -16,7 +17,7 @@ export default function PrivacyPage() {
         <Link href="/">
           <BrandMark className="h-10" />
         </Link>
-        <LanguageToggle />
+        <div className="flex items-center gap-2"><ThemeToggle /><LanguageToggle /></div>
       </div>
       <header>
         <h1 className="text-2xl font-semibold">{t("title")}</h1>

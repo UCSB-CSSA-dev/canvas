@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import { AppProviders } from "@/components/providers/app-providers";
 import "./globals.css";
 
+// Restore before paint; keep the default when browser storage is unavailable.
+const themeScript = `try{if(localStorage.getItem("cssa-hub-theme")==="light"){document.documentElement.classList.replace("dark","light");document.querySelector('meta[name="theme-color"]')?.setAttribute("content","#fafafa")}}catch{}`;
+
 export const metadata: Metadata = {
   title: "CSSA Hub",
   description: "UCSB CSSA internal platform",
@@ -17,8 +20,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="zh-CN" className="dark h-full antialiased">
+    <html lang="zh-CN" className="dark h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full">
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

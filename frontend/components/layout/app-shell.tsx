@@ -30,6 +30,7 @@ import { useSignOut } from "@/lib/push";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "./brand";
 import { LanguageToggle } from "./language-toggle";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 
 type NavItem = {
   key:
@@ -194,7 +195,7 @@ function Sidebar() {
           </Tooltip>
         </div>
         <div className="flex items-center justify-between">
-          <LanguageToggle />
+          <div className="flex items-center gap-2"><ThemeToggle /><LanguageToggle /></div>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button size="icon-sm" variant="ghost" onClick={() => void signOut()} aria-label={t("common.signOut")}>

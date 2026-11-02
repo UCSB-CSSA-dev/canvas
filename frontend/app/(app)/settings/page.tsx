@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useViewer } from "@/components/auth/account-state";
 import { OversightNotice } from "@/components/auth/oversight-notice";
 import { LanguageToggle } from "@/components/layout/language-toggle";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PageHeader } from "@/components/layout/app-shell";
 import { PushNotificationsCard } from "@/components/settings/push-notifications-card";
 import { DeactivateCard } from "@/components/settings/deactivate-card";
@@ -33,6 +34,11 @@ export default function SettingsPage() {
             <CardContent>
               <LanguageToggle />
             </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>{t("nav.appearance")}</CardTitle></CardHeader>
+            <CardContent><ThemeToggle /></CardContent>
           </Card>
 
           <PushNotificationsCard />

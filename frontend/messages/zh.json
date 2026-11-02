@@ -31,6 +31,9 @@
     "formerViceChair": "前副主席"
   },
   "nav": {
+    "appearance": "外观",
+    "switchToLight": "切换到浅色模式",
+    "switchToDark": "切换到深色模式",
     "chat": "聊天",
     "roster": "组织架构",
     "files": "文件",

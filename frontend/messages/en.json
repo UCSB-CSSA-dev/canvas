@@ -31,6 +31,9 @@
     "formerViceChair": "Former Vice President"
   },
   "nav": {
+    "appearance": "Appearance",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
     "chat": "Chat",
     "roster": "Roster",
     "files": "Files",

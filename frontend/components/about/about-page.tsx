@@ -17,6 +17,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { BrandMark } from "@/components/layout/brand";
 import { LanguageToggle } from "@/components/layout/language-toggle";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { PersonAvatar } from "@/components/people/person-avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -65,7 +66,7 @@ export function AboutPage() {
             </a>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <LanguageToggle />
+            <div className="flex items-center gap-2"><ThemeToggle /><LanguageToggle /></div>
             <Button asChild size="sm">
               <Link href="/">{t("openHub")}</Link>
             </Button>

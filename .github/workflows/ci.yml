@@ -2,8 +2,13 @@ name: CI
 
 on:
   pull_request:
+    branch:
+      - dev
+      - stable
   push:
-    branches-ignore: [main]
+    branches:
+      - dev
+      - stable
   workflow_call:
 
 concurrency:

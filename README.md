@@ -26,7 +26,11 @@ Access is limited to `@ucsb.edu` Google accounts. Every account must be **approv
 | Auth | Convex Auth with Google OAuth, restricted to `@ucsb.edu`, admin approval or email pre-approval required |
 | Email | Google Apps Script web app that sends through Gmail, called from Convex actions (Stage 3) |
 | i18n | `next-intl` (client-side), Chinese (`zh`) default, English (`en`) secondary, toggle in UI |
-| CI/CD | GitHub Actions: checks on every PR; on `main`, deploy Convex and publish the site to GitHub Pages |
+| CI/CD | GitHub Actions: checks on every PR into `dev` and `stable`; on `stable`, deploy Convex and publish the site to GitHub Pages |
+
+**Github Workflow**: When making a change/feature/bug create a new branch based on `dev`, after applying the changes, make a pull request to merge the new branch to `dev`, only requiring CI to pass. When there are a few changes in `dev`, one can make a PR to merge `dev` to `stable` and requiring CI to pass and approval from 1 other reviewer.
+
+**Branch Naming Rule**: If it relates to an issue, include the issue number, such as `issue-1-bug-fix-over...` or `issue-12-new-feature-on`.
 
 ---
 
@@ -96,7 +100,7 @@ npm workspaces with two packages. The frontend imports the backend's generated A
 ├── doc/                         # specifications (source of truth)
 ├── .github/workflows/
 │   ├── ci.yml                   # lint, typecheck, tests, i18n check, static build
-│   └── deploy.yml               # main: Convex deploy + GitHub Pages
+│   └── deploy.yml               # stable: Convex deploy + GitHub Pages
 ├── backend/                     # @cssa-hub/backend (Convex)
 │   ├── convex/
 │   │   ├── schema.ts, auth.ts, auth.config.ts, http.ts
@@ -155,7 +159,7 @@ The **first account to sign in becomes system admin**. In production, set `BOOTS
 
 ## Deployment (GitHub Pages + Convex)
 
-Pushing to `main` runs `.github/workflows/deploy.yml`: CI checks, then `npx convex deploy` (pushes schema and functions to the production deployment), then a static build of the frontend pointed at that deployment, published to `https://ucsb-cssa-dev.github.io/canvas/`.
+Pushing to `stable` runs `.github/workflows/deploy.yml`: CI checks, then `npx convex deploy` (pushes schema and functions to the production deployment), then a static build of the frontend pointed at that deployment, published to `https://ucsb-cssa-dev.github.io/canvas/`.
 
 One-time setup:
 
